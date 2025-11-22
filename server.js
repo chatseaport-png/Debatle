@@ -5,7 +5,7 @@ const { Server } = require('socket.io');
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0'; // Bind to all network interfaces
-const port = 3000;
+const port = process.env.PORT || 3000; // Use Railway's PORT or default to 3000
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
