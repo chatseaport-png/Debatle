@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { getRandomPrompt } from "@/lib/debatePrompts";
 import { useSocket } from "@/lib/socket";
 
-export default function DebateRoom() {
+function DebateRoom() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const mode = searchParams.get("mode") || "standard";
@@ -700,5 +700,18 @@ export default function DebateRoom() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DebatePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-2xl font-bold text-black mb-2">Loading debate...</div>
+        <div className="text-gray-600">Please wait</div>
+      </div>
+    </div>}>
+      <DebateRoom />
+    </Suspense>
   );
 }
