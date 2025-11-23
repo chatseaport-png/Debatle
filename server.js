@@ -10,10 +10,16 @@ const port = process.env.PORT || 3000; // Use Railway's PORT or default to 3000
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
-// Matchmaking queue
+// Matchmaking queues - separated by type (ranked/practice) and mode
 const matchmakingQueue = {
-  speed: [],
-  standard: []
+  ranked: {
+    speed: [],
+    standard: []
+  },
+  practice: {
+    speed: [],
+    standard: []
+  }
 };
 
 // Active matches
@@ -42,12 +48,12 @@ app.prepare().then(() => {
     console.log('User connected:', socket.id);
 
     // Join matchmaking queue
-    socket.on('join-queue', ({ mode, side, username }) => {
-      console.log(`${username} joined ${mode} queue (${side} side)`);
+    socket.on('join-queue', ({ mode, side, username, type = 'practice' }) => {
+      console.log(`${username} joined ${type} ${mode} queue (${side} side)`);
       
-      const queue = matchmakingQueue[mode];
+      const queue = matchmakingQueue[type][mode];
       
-      // Check if there's someone waiting
+      // Check if there's someone waiting in the same type/mode
       if (queue.length > 0) {
         const opponent = queue.shift();
         const matchId = `match-${Date.now()}`;
@@ -56,6 +62,7 @@ app.prepare().then(() => {
         const match = {
           id: matchId,
           mode,
+          type,
           player1: { id: opponent.socketId, username: opponent.username, side: opponent.side },
           player2: { id: socket.id, username, side },
           currentTurn: opponent.side === 'for' ? opponent.socketId : socket.id,
@@ -87,21 +94,23 @@ app.prepare().then(() => {
         socket.join(matchId);
         io.sockets.sockets.get(opponent.socketId)?.join(matchId);
         
-        console.log(`Match created: ${matchId}`);
+        console.log(`${type} match created: ${matchId}`);
       } else {
         // Add to queue
-        queue.push({ socketId: socket.id, username, side });
+        queue.push({ socketId: socket.id, username, side, type });
         socket.emit('queue-status', { position: queue.length });
       }
     });
 
     // Leave queue
-    socket.on('leave-queue', ({ mode }) => {
-      const queue = matchmakingQueue[mode];
-      const index = queue.findIndex(p => p.socketId === socket.id);
-      if (index !== -1) {
-        queue.splice(index, 1);
-        console.log('User left queue:', socket.id);
+    socket.on('leave-queue', ({ mode, type = 'practice' }) => {
+      const queue = matchmakingQueue[type]?.[mode];
+      if (queue) {
+        const index = queue.findIndex(p => p.socketId === socket.id);
+        if (index !== -1) {
+          queue.splice(index, 1);
+          console.log('User left queue:', socket.id);
+        }
       }
     });
 
@@ -154,10 +163,12 @@ app.prepare().then(() => {
     socket.on('disconnect', () => {
       console.log('User disconnected:', socket.id);
       
-      // Remove from all queues
-      Object.values(matchmakingQueue).forEach(queue => {
-        const index = queue.findIndex(p => p.socketId === socket.id);
-        if (index !== -1) queue.splice(index, 1);
+      // Remove from all queues (ranked and practice)
+      Object.values(matchmakingQueue).forEach(typeQueues => {
+        Object.values(typeQueues).forEach(queue => {
+          const index = queue.findIndex(p => p.socketId === socket.id);
+          if (index !== -1) queue.splice(index, 1);
+        });
       });
       
       // Handle active matches

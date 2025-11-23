@@ -9,17 +9,79 @@ export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    // Validation
     if (password !== confirmPassword) {
-      alert("Passwords don't match!");
+      setError("Passwords don't match!");
+      setLoading(false);
       return;
     }
-    // TODO: Implement actual registration
-    // For now, just redirect to lobby
-    router.push("/lobby");
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      setLoading(false);
+      return;
+    }
+
+    if (username.length < 3) {
+      setError("Username must be at least 3 characters");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Get existing users from localStorage
+      const storedUsers = localStorage.getItem("debatel_users");
+      const users = storedUsers ? JSON.parse(storedUsers) : [];
+
+      // Check if email already exists
+      if (users.some((u: any) => u.email === email)) {
+        setError("An account with this email already exists");
+        setLoading(false);
+        return;
+      }
+
+      // Check if username already exists
+      if (users.some((u: any) => u.username === username)) {
+        setError("This username is already taken");
+        setLoading(false);
+        return;
+      }
+
+      // Add new user
+      const newUser = {
+        username,
+        email,
+        password, // In production, this should be hashed
+        createdAt: new Date().toISOString()
+      };
+
+      users.push(newUser);
+      localStorage.setItem("debatel_users", JSON.stringify(users));
+
+      // Store logged-in user
+      localStorage.setItem("debatel_user", JSON.stringify({
+        username: newUser.username,
+        email: newUser.email
+      }));
+
+      // Trigger storage event for navbar update
+      window.dispatchEvent(new Event("storage"));
+
+      // Redirect to lobby
+      router.push("/lobby");
+    } catch (err) {
+      setError("An error occurred. Please try again.");
+      setLoading(false);
+    }
   };
 
   return (
@@ -29,7 +91,7 @@ export default function Register() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center">
             <Link href="/" className="border-2 border-black bg-white px-3 py-1 text-2xl font-bold tracking-tight text-black transition hover:bg-gray-50">
-              DEBATLE
+              DEBATEL
             </Link>
           </div>
         </div>
@@ -42,6 +104,12 @@ export default function Register() {
           </div>
 
           <div className="border-2 border-black bg-white p-10">
+            {error && (
+              <div className="mb-6 border-2 border-red-500 bg-red-50 px-4 py-3 text-red-700">
+                {error}
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label htmlFor="username" className="block text-sm font-bold uppercase tracking-wide text-black">
@@ -55,6 +123,8 @@ export default function Register() {
                   className="mt-2 w-full border-2 border-gray-300 px-4 py-3 text-black focus:border-black focus:outline-none"
                   placeholder="Your debate name"
                   required
+                  disabled={loading}
+                  minLength={3}
                 />
               </div>
 
@@ -70,6 +140,7 @@ export default function Register() {
                   className="mt-2 w-full border-2 border-gray-300 px-4 py-3 text-black focus:border-black focus:outline-none"
                   placeholder="your.email@example.com"
                   required
+                  disabled={loading}
                 />
               </div>
 
@@ -85,6 +156,8 @@ export default function Register() {
                   className="mt-2 w-full border-2 border-gray-300 px-4 py-3 text-black focus:border-black focus:outline-none"
                   placeholder="••••••••"
                   required
+                  disabled={loading}
+                  minLength={6}
                 />
               </div>
 
@@ -100,14 +173,17 @@ export default function Register() {
                   className="mt-2 w-full border-2 border-gray-300 px-4 py-3 text-black focus:border-black focus:outline-none"
                   placeholder="••••••••"
                   required
+                  disabled={loading}
+                  minLength={6}
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full bg-black py-4 font-bold uppercase tracking-wide text-white transition hover:bg-gray-800"
+                disabled={loading}
+                className="w-full bg-black py-4 font-bold uppercase tracking-wide text-white transition hover:bg-gray-800 disabled:bg-gray-400"
               >
-                Create Account
+                {loading ? "Creating Account..." : "Create Account"}
               </button>
             </form>
 

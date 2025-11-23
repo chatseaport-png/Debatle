@@ -24,11 +24,11 @@ Vercel is made by the Next.js team and has free hosting.
 
 3. **Deploy Your Project**
    ```bash
-   cd /Users/sawyerbrotman/Debatle
+   cd /Users/sawyerbrotman/Debatel
    vercel
    ```
    - Answer questions (just press Enter for defaults)
-   - It will give you a URL like: `https://debatle.vercel.app`
+   - It will give you a URL like: `https://debatel.vercel.app`
 
 4. **Add Environment Variables**
    - Go to your Vercel dashboard
@@ -37,7 +37,7 @@ Vercel is made by the Next.js team and has free hosting.
    - Redeploy
 
 5. **Share the URL**
-   - Anyone can now access: `https://debatle.vercel.app` (or your custom URL)
+   - Anyone can now access: `https://debatel.vercel.app` (or your custom URL)
    - Works from anywhere in the world!
 
 **Note**: Vercel's free tier doesn't support WebSockets for real-time multiplayer. You'd need to upgrade or use a different platform for the Socket.io features.
@@ -61,7 +61,7 @@ Railway supports WebSockets and Node.js servers perfectly.
 
 3. **Login & Deploy**
    ```bash
-   cd /Users/sawyerbrotman/Debatle
+   cd /Users/sawyerbrotman/Debatel
    railway login
    railway init
    railway up
@@ -103,7 +103,7 @@ Railway supports WebSockets and Node.js servers perfectly.
    - Add `OPENAI_API_KEY` in dashboard
 
 5. **Your Site is Live**
-   - Render gives you: `https://debatle.onrender.com`
+   - Render gives you: `https://debatel.onrender.com`
 
 ---
 

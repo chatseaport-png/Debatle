@@ -7,15 +7,30 @@ import { useSocket } from "@/lib/socket";
 
 type GameMode = "speed" | "standard";
 type DebateSide = "for" | "against";
+type GameType = "ranked" | "practice";
 
 export default function Lobby() {
   const [inQueue, setInQueue] = useState(false);
   const [queueTime, setQueueTime] = useState(0);
   const [selectedMode, setSelectedMode] = useState<GameMode>("standard");
   const [selectedSide, setSelectedSide] = useState<DebateSide>("for");
-  const [username] = useState(() => `Player${Math.floor(Math.random() * 9999)}`);
+  const [selectedType, setSelectedType] = useState<GameType>("practice");
+  const [username, setUsername] = useState(() => `Player${Math.floor(Math.random() * 9999)}`);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const router = useRouter();
   const { socket, isConnected } = useSocket();
+
+  // Load username from localStorage if logged in
+  useEffect(() => {
+    const storedUser = localStorage.getItem("debatel_user");
+    if (storedUser) {
+      const user = JSON.parse(storedUser);
+      setUsername(user.username);
+      setIsLoggedIn(true);
+    } else {
+      setIsLoggedIn(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!socket) return;
@@ -23,7 +38,8 @@ export default function Lobby() {
     // Listen for match found
     socket.on("match-found", ({ matchId, opponent, yourSide, opponentSide, goesFirst }) => {
       console.log("Match found!", { matchId, opponent, yourSide, goesFirst });
-      router.push(`/debate?mode=${selectedMode}&side=${yourSide}&matchId=${matchId}&multiplayer=true&goesFirst=${goesFirst}`);
+      setInQueue(false); // Stop queue timer when match is found
+      router.push(`/debate?mode=${selectedMode}&side=${yourSide}&matchId=${matchId}&multiplayer=true&goesFirst=${goesFirst}&type=${selectedType}`);
     });
 
     socket.on("queue-status", ({ position }) => {
@@ -38,19 +54,39 @@ export default function Lobby() {
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
+    let timeout: NodeJS.Timeout;
     
     if (inQueue) {
       interval = setInterval(() => {
         setQueueTime((prev) => prev + 1);
       }, 1000);
+      
+      // Silent AI fallback for practice mode after 15 seconds
+      if (selectedType === "practice") {
+        timeout = setTimeout(() => {
+          if (socket) {
+            socket.emit("leave-queue", { mode: selectedMode, type: selectedType });
+          }
+          setInQueue(false);
+          router.push(`/debate?mode=${selectedMode}&side=${selectedSide}&multiplayer=false&type=practice`);
+        }, 15000);
+      }
     }
     
     return () => {
       if (interval) clearInterval(interval);
+      if (timeout) clearTimeout(timeout);
     };
-  }, [inQueue]);
+  }, [inQueue, router, selectedMode, selectedSide, selectedType, socket]);
 
   const joinQueue = () => {
+    // Check if user is trying to play ranked without being logged in
+    if (selectedType === "ranked" && !isLoggedIn) {
+      alert("You must be logged in to play ranked matches. Please sign up or log in.");
+      router.push("/login");
+      return;
+    }
+
     if (!socket || !isConnected) {
       alert("Not connected to server. Please refresh the page.");
       return;
@@ -61,13 +97,14 @@ export default function Lobby() {
     socket.emit("join-queue", {
       mode: selectedMode,
       side: selectedSide,
-      username
+      username,
+      type: selectedType
     });
   };
 
   const leaveQueue = () => {
     if (socket) {
-      socket.emit("leave-queue", { mode: selectedMode });
+      socket.emit("leave-queue", { mode: selectedMode, type: selectedType });
     }
     setInQueue(false);
     setQueueTime(0);
@@ -80,7 +117,7 @@ export default function Lobby() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <Link href="/" className="border-2 border-black bg-white px-3 py-1 text-2xl font-bold tracking-tight text-black">
-              DEBATLE
+              DEBATEL
             </Link>
             <div className="flex items-center gap-4">
               <Link href="/leaderboard" className="text-sm font-medium text-gray-700 hover:text-black">
@@ -93,32 +130,73 @@ export default function Lobby() {
 
       <main className="mx-auto max-w-3xl px-4 py-12">
         {/* Player Stats */}
-        <div className="mb-6 border border-gray-300 bg-white p-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-3xl font-bold text-black">1,450</div>
-              <div className="text-xs uppercase tracking-wide text-gray-600">ELO Rating</div>
+        {isLoggedIn && (
+          <div className="mb-6 border border-gray-300 bg-white p-8">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-bold text-black">1,450</div>
+                <div className="text-xs uppercase tracking-wide text-gray-600">ELO Rating</div>
+              </div>
+              <div className="flex gap-6 text-sm">
+                <div>
+                  <div className="font-bold text-black">24</div>
+                  <div className="text-xs text-gray-600">Wins</div>
+                </div>
+                <div>
+                  <div className="font-bold text-black">18</div>
+                  <div className="text-xs text-gray-600">Losses</div>
+                </div>
+                <div>
+                  <div className="font-bold text-black">57%</div>
+                  <div className="text-xs text-gray-600">Win Rate</div>
+                </div>
+              </div>
             </div>
-            <div className="flex gap-6 text-sm">
-              <div>
-                <div className="font-bold text-black">24</div>
-                <div className="text-xs text-gray-600">Wins</div>
+          </div>
+        )}
+
+        {/* Game Type Selection */}
+        <div className="mb-6 border border-gray-300 bg-white p-6">
+          <h3 className="mb-4 text-lg font-bold text-black">Game Type</h3>
+          <div className="grid gap-4 md:grid-cols-2">
+            <button
+              onClick={() => setSelectedType("practice")}
+              className={`border-2 p-4 text-left transition ${
+                selectedType === "practice"
+                  ? "border-black bg-gray-50"
+                  : "border-gray-300 bg-white hover:border-gray-400"
+              }`}
+            >
+              <div className="mb-1 font-bold text-black">Practice</div>
+              <div className="text-xs text-gray-600">Casual matches with other practicing players</div>
+            </button>
+            <button
+              onClick={() => {
+                if (!isLoggedIn) {
+                  alert("You must be logged in to play ranked matches!");
+                  return;
+                }
+                setSelectedType("ranked");
+              }}
+              className={`border-2 p-4 text-left transition ${
+                selectedType === "ranked"
+                  ? "border-black bg-gray-50"
+                  : "border-gray-300 bg-white hover:border-gray-400"
+              } ${!isLoggedIn ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+              <div className="mb-1 font-bold text-black">
+                Ranked {!isLoggedIn && "🔒"}
               </div>
-              <div>
-                <div className="font-bold text-black">18</div>
-                <div className="text-xs text-gray-600">Losses</div>
+              <div className="text-xs text-gray-600">
+                {isLoggedIn ? "Competitive matches with ELO tracking" : "Login required"}
               </div>
-              <div>
-                <div className="font-bold text-black">57%</div>
-                <div className="text-xs text-gray-600">Win Rate</div>
-              </div>
-            </div>
+            </button>
           </div>
         </div>
 
         {/* Game Mode Selection */}
         <div className="mb-6 border border-gray-300 bg-white p-6">
-          <h3 className="mb-4 text-lg font-bold text-black">Select Mode</h3>
+          <h3 className="mb-4 text-lg font-bold text-black">Time Control</h3>
           <div className="grid gap-4 md:grid-cols-2">
             <button
               onClick={() => setSelectedMode("speed")}
@@ -188,7 +266,11 @@ export default function Lobby() {
           ) : (
             <div className="text-center">
               <div className="mb-4 text-4xl font-bold text-black">{queueTime}s</div>
-              <p className="mb-4 text-sm font-semibold text-gray-700">Finding opponent...</p>
+              <p className="mb-4 text-sm font-semibold text-gray-700">
+                {selectedType === "ranked" 
+                  ? "Finding ranked opponent..." 
+                  : "Finding practice match..."}
+              </p>
               <div className="mx-auto mb-6 h-1 w-64 overflow-hidden bg-gray-200">
                 <div className="h-full animate-pulse bg-black" style={{ width: "70%" }}></div>
               </div>

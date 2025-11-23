@@ -5,43 +5,96 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement actual authentication
-    // For now, just redirect to lobby
-    router.push("/lobby");
+    setError("");
+    setLoading(true);
+
+    try {
+      // Get stored users from localStorage
+      const storedUsers = localStorage.getItem("debatel_users");
+      const users = storedUsers ? JSON.parse(storedUsers) : [];
+
+      // Find user with matching email OR username
+      const user = users.find((u: any) => 
+        u.email === identifier || u.username === identifier
+      );
+
+      if (!user) {
+        setError("No account found with this username or email");
+        setLoading(false);
+        return;
+      }
+
+      if (user.password !== password) {
+        setError("Incorrect password");
+        setLoading(false);
+        return;
+      }
+
+      // Store logged-in user
+      localStorage.setItem("debatel_user", JSON.stringify({
+        username: user.username,
+        email: user.email
+      }));
+
+      // Trigger storage event for navbar update
+      window.dispatchEvent(new Event("storage"));
+
+      // Redirect to lobby
+      router.push("/lobby");
+    } catch (err) {
+      setError("An error occurred. Please try again.");
+      setLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="flex min-h-screen items-center justify-center px-4">
+      {/* Navigation */}
+      <nav className="border-b border-gray-300 bg-white">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex h-16 items-center">
+            <Link href="/" className="border-2 border-black bg-white px-3 py-1 text-2xl font-bold tracking-tight text-black transition hover:bg-gray-50">
+              DEBATEL
+            </Link>
+          </div>
+        </div>
+      </nav>
+
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
           <div className="mb-12 text-center">
-            <Link href="/" className="inline-block border-4 border-black bg-white px-8 py-4 text-5xl font-bold tracking-tight text-black transition hover:bg-gray-50">
-              DEBATLE
-            </Link>
-            <h2 className="mt-8 text-3xl font-bold text-black">Account Login</h2>
-            <p className="mt-3 text-gray-600">Access your debate profile</p>
+            <h2 className="text-3xl font-bold text-black">Account Login</h2>
           </div>
 
           <div className="border-2 border-black bg-white p-10">
+            {error && (
+              <div className="mb-6 border-2 border-red-500 bg-red-50 px-4 py-3 text-red-700">
+                {error}
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <label htmlFor="email" className="block text-sm font-bold uppercase tracking-wide text-black">
-                  Email Address
+                <label htmlFor="identifier" className="block text-sm font-bold uppercase tracking-wide text-black">
+                  Username or Email
                 </label>
                 <input
-                  type="email"
-                  id="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="text"
+                  id="identifier"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
                   className="mt-2 w-full border-2 border-gray-300 px-4 py-3 text-black focus:border-black focus:outline-none"
-                  placeholder="your.email@example.com"
+                  placeholder="your.email@example.com or username"
                   required
+                  disabled={loading}
                 />
               </div>
 
@@ -57,14 +110,16 @@ export default function Login() {
                   className="mt-2 w-full border-2 border-gray-300 px-4 py-3 text-black focus:border-black focus:outline-none"
                   placeholder="••••••••"
                   required
+                  disabled={loading}
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full bg-black py-4 font-bold uppercase tracking-wide text-white transition hover:bg-gray-800"
+                disabled={loading}
+                className="w-full bg-black py-4 font-bold uppercase tracking-wide text-white transition hover:bg-gray-800 disabled:bg-gray-400"
               >
-                Login
+                {loading ? "Logging in..." : "Login"}
               </button>
             </form>
 

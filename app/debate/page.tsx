@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { getRandomPrompt } from "@/lib/debatePrompts";
 import { useSocket } from "@/lib/socket";
@@ -14,6 +14,7 @@ export default function DebateRoom() {
   const matchId = searchParams.get("matchId");
   const isMultiplayer = searchParams.get("multiplayer") === "true";
   const goesFirst = searchParams.get("goesFirst") === "true";
+  const gameType = searchParams.get("type") || "practice";
   const timePerTurn = mode === "speed" ? 30 : 60;
   const totalRounds = 5;
 
@@ -28,14 +29,7 @@ export default function DebateRoom() {
     text: string; 
     time: number;
     isYourTurn: boolean;
-  }>>([
-    { 
-      sender: "Moderator", 
-      text: `Resolution assigned. You have 60 seconds to analyze the topic before the debate begins.`, 
-      time: 0,
-      isYourTurn: false
-    },
-  ]);
+  }>>([]);
   const [currentMessage, setCurrentMessage] = useState("");
   const [timeLeft, setTimeLeft] = useState(60);
   const [round, setRound] = useState(0);
@@ -47,6 +41,12 @@ export default function DebateRoom() {
   const [isAnalyzing, setIsAnalyzing] = useState(true);
   const [isJudging, setIsJudging] = useState(false);
   const [aiJudgement, setAiJudgement] = useState<any>(null);
+  const [messagesThisRound, setMessagesThisRound] = useState(0);
+  const [isReadingBreak, setIsReadingBreak] = useState(false);
+  const [nextTurn, setNextTurn] = useState<"player" | "opponent" | null>(null);
+  const [pendingDebateEnd, setPendingDebateEnd] = useState(false);
+  const READING_DURATION = 10;
+  const opponentResponseTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Multiplayer socket listeners
   useEffect(() => {
@@ -90,101 +90,185 @@ export default function DebateRoom() {
   }, [socket, isMultiplayer, matchId, timePerTurn]);
 
   useEffect(() => {
-    if (debateEnded) return;
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          if (isAnalyzing) {
-            // Analysis period ended, start debate
-            setIsAnalyzing(false);
-            setRound(1);
-            setIsYourTurn(position === "for");
-            const startMsg = {
-              sender: "Moderator",
-              text: `Analysis complete. Debate begins. ${position === "for" ? "You open" : "Opponent opens"}.`,
-              time: 0,
-              isYourTurn: false
-            };
-            setMessages(prev => [...prev, startMsg]);
-            
-            if (position === "against") {
-              // Opponent goes first
-              setTimeout(() => generateOpponentResponse(), 2000);
-            }
-            return timePerTurn;
-          } else if (isYourTurn && !hasSubmitted) {
-            // Time's up during debate - auto-submit or skip turn
-            handleTimeUp();
-          }
-          return timePerTurn;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [isYourTurn, hasSubmitted, debateEnded, timePerTurn, isAnalyzing, position]);
-
-  const handleTimeUp = () => {
-    if (!hasSubmitted) {
-      const penaltyMsg = {
-        sender: "Moderator",
-        text: "Time expired. No argument submitted. Points deducted.",
-        time: 0,
-        isYourTurn: false
-      };
-      setMessages(prev => [...prev, penaltyMsg]);
-      setYourScore(Math.max(0, yourScore - 10));
-    }
-    switchTurns();
-  };
-
-  const switchTurns = () => {
-    setHasSubmitted(false);
-    setIsYourTurn(!isYourTurn);
-    setTimeLeft(timePerTurn);
-    
-    if (!isYourTurn) {
-      // It will be opponent's turn, simulate their response
-      setTimeout(() => {
-        generateOpponentResponse();
-      }, 2000);
-    }
-    
-    const newRound = Math.ceil((messages.filter(m => m.sender !== "Moderator").length + 1) / 2);
-    setRound(newRound);
-    
-    if (newRound > totalRounds) {
-      endDebate();
-    }
-  };
+    return () => {
+      if (opponentResponseTimeout.current) {
+        clearTimeout(opponentResponseTimeout.current);
+      }
+    };
+  }, []);
 
   const generateOpponentResponse = () => {
-    const opponentMessages = [
+    const opponentMessages_pool = [
       "The empirical evidence contradicts this position. Studies from peer-reviewed journals demonstrate that federal oversight has consistently produced superior outcomes in environmental policy coordination.",
       "Your argument fails to address the constitutional framework. The Commerce Clause explicitly grants Congress authority over interstate matters, which environmental issues inherently are.",
       "I must respectfully disagree. The data from the past three decades shows that state-level initiatives have been undermined by lack of coordination and regulatory arbitrage.",
       "This perspective overlooks the economic externalities. Without federal standards, we create a race to the bottom where states compete by lowering environmental protections.",
       "Historical precedent contradicts your position. The Clean Air Act and Clean Water Act demonstrate the effectiveness of federal environmental regulation.",
       "Your reasoning ignores the tragedy of the commons. Interstate pollution requires interstate solutions, which only federal policy can provide.",
+      "The fundamental flaw in your logic is the assumption that localized decision-making produces optimal outcomes when dealing with systemic issues.",
+      "International comparisons clearly demonstrate that centralized regulatory frameworks achieve better results than fragmented approaches.",
+      "You're overlooking the critical issue of enforcement consistency, which can only be guaranteed through unified federal standards.",
+      "The market failures you're ignoring require coordinated intervention that individual states cannot provide independently.",
+      "Your position contradicts decades of economic research on collective action problems and regulatory capture at the state level.",
+      "The constitutional history you cite actually supports the opposite conclusion when examined in its full historical context.",
+      "Evidence from similar policy experiments shows that decentralized approaches consistently fail to address cross-border spillover effects.",
+      "The data clearly indicates that race-to-the-bottom dynamics emerge when regulatory authority is devolved to competing jurisdictions.",
+      "Your framework ignores the information asymmetries that make state-level regulation inherently less effective than federal oversight.",
+      "The precedent you reference has been superseded by more recent jurisprudence that recognizes the necessity of federal coordination.",
+      "Research demonstrates that compliance costs actually decrease under unified federal standards compared to navigating 50 different state regimes.",
+      "The efficiency argument you make fails to account for the coordination costs and regulatory arbitrage that fragment state systems.",
+      "Your position relies on assumptions about state capacity that empirical evidence consistently contradicts.",
+      "The success stories you cite are statistical outliers that don't represent the typical outcomes of decentralized policy implementation.",
     ];
-    
+
     const opponentMsg = {
       sender: "Opponent",
-      text: opponentMessages[Math.floor(Math.random() * opponentMessages.length)],
-      time: Math.floor(Math.random() * 15) + 10,
+      text: opponentMessages_pool[Math.floor(Math.random() * opponentMessages_pool.length)],
+      time: Math.floor(Math.random() * timePerTurn),
       isYourTurn: false
     };
-    
+
     setMessages(prev => [...prev, opponentMsg]);
     const opponentPoints = Math.floor(Math.random() * 25) + 20;
     setOpponentScore(prev => prev + opponentPoints);
-    
-    setTimeout(() => {
-      setIsYourTurn(true);
-      setTimeLeft(timePerTurn);
+    completeTurn("opponent");
+  };
+
+  useEffect(() => {
+    if (debateEnded) return;
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => (prev > 0 ? prev - 1 : prev));
     }, 1000);
+
+    return () => clearInterval(timer);
+  }, [debateEnded]);
+
+  useEffect(() => {
+    if (debateEnded || timeLeft > 0) return;
+
+    if (isAnalyzing) {
+      setIsAnalyzing(false);
+      setRound(1);
+      setMessagesThisRound(0);
+      setPendingDebateEnd(false);
+      setNextTurn(null);
+      setIsReadingBreak(false);
+      const youStart = position === "for" || goesFirst;
+      setIsYourTurn(youStart);
+      setHasSubmitted(!youStart);
+      setTimeLeft(timePerTurn);
+      if (!youStart && !isMultiplayer) {
+        if (opponentResponseTimeout.current) {
+          clearTimeout(opponentResponseTimeout.current);
+        }
+        const minDelay = 5;
+        const maxDelay = Math.max(minDelay + 1, timePerTurn - 5);
+        const delaySeconds = Math.floor(Math.random() * (maxDelay - minDelay)) + minDelay;
+        opponentResponseTimeout.current = setTimeout(() => {
+          generateOpponentResponse();
+          opponentResponseTimeout.current = null;
+        }, delaySeconds * 1000);
+      }
+      return;
+    }
+
+    if (isReadingBreak) {
+      setIsReadingBreak(false);
+
+      if (pendingDebateEnd && nextTurn === null) {
+        setPendingDebateEnd(false);
+        endDebate();
+        return;
+      }
+
+      if (nextTurn === "player") {
+        setIsYourTurn(true);
+        setHasSubmitted(false);
+        setTimeLeft(timePerTurn);
+      } else if (nextTurn === "opponent") {
+        setIsYourTurn(false);
+        setHasSubmitted(true);
+        setTimeLeft(timePerTurn);
+        if (!isMultiplayer) {
+          if (opponentResponseTimeout.current) {
+            clearTimeout(opponentResponseTimeout.current);
+          }
+          const minDelay = 5;
+          const maxDelay = Math.max(minDelay + 1, timePerTurn - 5);
+          const delaySeconds = Math.floor(Math.random() * (maxDelay - minDelay)) + minDelay;
+          opponentResponseTimeout.current = setTimeout(() => {
+            generateOpponentResponse();
+            opponentResponseTimeout.current = null;
+          }, delaySeconds * 1000);
+        }
+      } else if (pendingDebateEnd) {
+        setPendingDebateEnd(false);
+        endDebate();
+        return;
+      }
+
+      setNextTurn(null);
+      return;
+    }
+
+    handleTimeUp();
+  }, [timeLeft, debateEnded, isAnalyzing, isReadingBreak, isMultiplayer, goesFirst, position, timePerTurn, nextTurn, pendingDebateEnd, generateOpponentResponse]);
+
+  const handleTimeUp = () => {
+    const timedOutSpeaker = isYourTurn ? "player" : "opponent";
+    const timeoutMsg = {
+      sender: isYourTurn ? "You" : "Opponent",
+      text: "⏳ No submission received.",
+      time: timePerTurn,
+      isYourTurn
+    };
+    setMessages(prev => [...prev, timeoutMsg]);
+
+    if (isYourTurn) {
+      setYourScore(prev => Math.max(0, prev - 10));
+    } else {
+      setOpponentScore(prev => Math.max(0, prev - 10));
+    }
+
+    completeTurn(timedOutSpeaker);
+  };
+
+  const beginReadingBreak = (upNext: "player" | "opponent" | null) => {
+    setIsReadingBreak(true);
+    setNextTurn(upNext);
+    setTimeLeft(READING_DURATION);
+    setHasSubmitted(true);
+    setIsYourTurn(false);
+
+    if (opponentResponseTimeout.current) {
+      clearTimeout(opponentResponseTimeout.current);
+      opponentResponseTimeout.current = null;
+    }
+  };
+
+  const completeTurn = (speaker: "player" | "opponent") => {
+    const wasSecondMessage = messagesThisRound === 1;
+    const finalRoundComplete = wasSecondMessage && round >= totalRounds;
+    const shouldAdvanceRound = wasSecondMessage && round < totalRounds;
+    const nextSpeaker: "player" | "opponent" | null = finalRoundComplete
+      ? null
+      : speaker === "player"
+        ? "opponent"
+        : "player";
+    const nextCount = wasSecondMessage ? 0 : Math.min(1, messagesThisRound + 1);
+
+    setMessagesThisRound(nextCount);
+
+    if (shouldAdvanceRound) {
+      setRound(prev => Math.min(prev + 1, totalRounds));
+    }
+
+    if (finalRoundComplete) {
+      setPendingDebateEnd(true);
+    }
+
+    beginReadingBreak(nextSpeaker);
   };
 
   const sendMessage = () => {
@@ -219,30 +303,20 @@ export default function DebateRoom() {
     }
     
     setCurrentMessage("");
-    
-    setTimeout(() => {
-      if (!isMultiplayer) {
-        switchTurns();
-      }
-    }, 1500);
+    completeTurn("player");
   };
 
   const endDebate = async () => {
     setDebateEnded(true);
     setIsJudging(true);
+    setPendingDebateEnd(false);
+    setIsReadingBreak(false);
+    setNextTurn(null);
     
     // Notify server if multiplayer
     if (isMultiplayer && socket && matchId) {
       socket.emit("end-debate", { matchId });
     }
-    
-    const finalMsg = {
-      sender: "Moderator",
-      text: `Debate concluded. AI is analyzing arguments...`,
-      time: 0,
-      isYourTurn: false
-    };
-    setMessages(prev => [...prev, finalMsg]);
 
     // Get AI judgement
     try {
@@ -349,7 +423,13 @@ export default function DebateRoom() {
             </button>
             <div className="text-center">
               <div className="text-xs uppercase tracking-wider text-gray-500">
-                {isAnalyzing ? "Analyzing Topic" : `Round ${round}/${totalRounds}`} • {mode === "speed" ? "Speed" : "Standard"}
+                {isAnalyzing
+                  ? "Analysis Phase"
+                  : debateEnded
+                    ? "Judging Phase"
+                    : isReadingBreak
+                      ? `Round ${round}/${totalRounds} • Reading Break`
+                      : `Round ${round}/${totalRounds} • ${isYourTurn ? "Your Turn" : "Opponent's Turn"}`} • {mode === "speed" ? "Speed" : "Standard"} • <span className={gameType === "ranked" ? "font-bold text-black" : "text-gray-400"}>{gameType === "ranked" ? "RANKED" : "Practice"}</span>
               </div>
             </div>
             <div className="text-right">
@@ -382,20 +462,49 @@ export default function DebateRoom() {
             </div>
 
             {/* Turn Indicator */}
-            {!debateEnded && !isAnalyzing && (
-              <div className={`mb-4 border-l-2 p-3 ${
-                isYourTurn ? "border-black bg-blue-50" : "border-gray-400 bg-gray-50"
+            {!debateEnded && !isAnalyzing && !isReadingBreak && (
+              <div className={`mb-4 border-l-4 p-4 ${
+                isYourTurn 
+                  ? "border-green-600 bg-green-100" 
+                  : "border-orange-500 bg-orange-50"
               }`}>
-                <div className="text-xs font-bold uppercase tracking-wide">
-                  {isYourTurn ? "Your Turn" : "Opponent's Turn"}
+                <div className="flex items-center justify-between">
+                  <div className={`text-sm font-bold uppercase tracking-wider ${
+                    isYourTurn ? "text-green-800" : "text-orange-800"
+                  }`}>
+                    {isYourTurn ? "🟢 YOUR TURN TO RESPOND" : "🟠 OPPONENT IS RESPONDING"}
+                  </div>
+                  <div className={`text-xs font-semibold ${
+                    isYourTurn ? "text-green-700" : "text-orange-700"
+                  }`}>
+                    Round {round}/{totalRounds}
+                  </div>
                 </div>
               </div>
             )}
             
             {isAnalyzing && (
-              <div className="mb-4 border-l-2 border-blue-600 bg-blue-50 p-3">
-                <div className="text-xs font-bold uppercase tracking-wide text-blue-900">
-                  Analyzing Topic - Prepare Your Arguments
+              <div className="mb-4 border-l-4 border-blue-600 bg-blue-50 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-bold uppercase tracking-wider text-blue-900">
+                    🔵 ANALYSIS PHASE - PREPARE YOUR ARGUMENTS
+                  </div>
+                  <div className="text-xs font-semibold text-blue-700">
+                    60 seconds
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isReadingBreak && !debateEnded && (
+              <div className="mb-4 border-l-4 border-purple-600 bg-purple-50 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-bold uppercase tracking-wider text-purple-900">
+                    🕒 READING WINDOW - REVIEW THE LAST ARGUMENT
+                  </div>
+                  <div className="text-xs font-semibold text-purple-700">
+                    10 seconds
+                  </div>
                 </div>
               </div>
             )}
@@ -422,9 +531,6 @@ export default function DebateRoom() {
                       {msg.sender}
                     </div>
                     <div className="text-sm leading-relaxed text-black">{msg.text}</div>
-                    {msg.time > 0 && (
-                      <div className="mt-1 text-xs text-gray-500">{msg.time}s</div>
-                    )}
                   </div>
                 </div>
               ))}
@@ -437,20 +543,33 @@ export default function DebateRoom() {
                   value={currentMessage}
                   onChange={(e) => setCurrentMessage(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey && isYourTurn && !hasSubmitted && !isAnalyzing) {
+                    if (
+                      e.key === "Enter" &&
+                      !e.shiftKey &&
+                      isYourTurn &&
+                      !hasSubmitted &&
+                      !isAnalyzing &&
+                      !isReadingBreak
+                    ) {
                       e.preventDefault();
                       sendMessage();
                     }
                   }}
-                  placeholder={isAnalyzing ? "Analyzing topic..." : isYourTurn ? "Enter argument... (Enter to submit)" : "Waiting..."}
-                  disabled={!isYourTurn || hasSubmitted || isAnalyzing}
+                  placeholder={isAnalyzing
+                    ? "Analyzing topic..."
+                    : isReadingBreak
+                      ? "Reading window in progress..."
+                      : isYourTurn
+                        ? "Enter argument... (Enter to submit)"
+                        : "Waiting..."}
+                  disabled={!isYourTurn || hasSubmitted || isAnalyzing || isReadingBreak}
                   className="w-full resize-none border border-gray-200 p-3 text-sm text-black placeholder-gray-400 focus:border-black focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
                   rows={3}
                 />
                 <div className="mt-2 flex justify-end">
                   <button
                     onClick={sendMessage}
-                    disabled={!isYourTurn || hasSubmitted || !currentMessage.trim() || isAnalyzing}
+                    disabled={!isYourTurn || hasSubmitted || !currentMessage.trim() || isAnalyzing || isReadingBreak}
                     className="rounded-sm bg-black px-6 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
                   >
                     Submit
@@ -549,59 +668,34 @@ export default function DebateRoom() {
 
           {/* Sidebar */}
           <div className="space-y-4">
-            {/* Scores */}
-            <div className="border border-gray-300 bg-white p-4">
-              <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-black">
-                Scores
-              </h3>
-              <div className="space-y-3">
-                <div>
-                  <div className="mb-1 flex justify-between text-xs">
-                    <span className="font-semibold text-black">You</span>
-                    <span className="font-bold text-black">{yourScore}</span>
+            {/* Debate Status */}
+            {!debateEnded && (
+              <div className="border border-gray-300 bg-white p-4">
+                <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-black">
+                  Debate Status
+                </h3>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Phase</span>
+                    <span className="font-semibold text-black">
+                      {isAnalyzing ? "Analysis" : isReadingBreak ? "Reading Break" : `Round ${round}/${totalRounds}`}
+                    </span>
                   </div>
-                  <div className="h-1.5 bg-gray-200">
-                    <div
-                      className="h-full bg-black transition-all"
-                      style={{ width: `${(yourScore / (yourScore + opponentScore)) * 100 || 50}%` }}
-                    ></div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Turn</span>
+                    <span className="font-semibold text-black">
+                      {isAnalyzing ? "—" : isReadingBreak ? "Paused" : isYourTurn ? "You" : "Opponent"}
+                    </span>
                   </div>
-                </div>
-                <div>
-                  <div className="mb-1 flex justify-between text-xs">
-                    <span className="font-semibold text-gray-700">Opponent</span>
-                    <span className="font-bold text-gray-700">{opponentScore}</span>
-                  </div>
-                  <div className="h-1.5 bg-gray-200">
-                    <div
-                      className="h-full bg-gray-600 transition-all"
-                      style={{ width: `${(opponentScore / (yourScore + opponentScore)) * 100 || 50}%` }}
-                    ></div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Mode</span>
+                    <span className="font-semibold text-black">
+                      {mode === "speed" ? "Speed (30s)" : "Standard (60s)"}
+                    </span>
                   </div>
                 </div>
               </div>
-            </div>
-
-            {/* AI Evaluation */}
-            <div className="border border-gray-300 bg-white p-4">
-              <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-black">
-                AI Analysis
-              </h3>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Response</span>
-                  <span className="font-semibold text-black">Good</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Clarity</span>
-                  <span className="font-semibold text-black">Strong</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Relevance</span>
-                  <span className="font-semibold text-black">On-Topic</span>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

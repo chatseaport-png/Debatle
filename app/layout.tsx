@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Debatle - Competitive Debate Platform",
+  title: "Debatel - Competitive Debate Platform",
   description: "Join live debates, climb the ranks, and prove your arguments with AI-powered judging",
 };
 

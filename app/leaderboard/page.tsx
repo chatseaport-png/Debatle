@@ -12,7 +12,7 @@ export default function Leaderboard() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-20 items-center justify-between">
             <Link href="/" className="border-2 border-black bg-white px-3 py-1 text-3xl font-bold tracking-tight text-black">
-              DEBATLE
+              DEBATEL
             </Link>
             <div className="flex items-center gap-6">
               <Link href="/lobby" className="font-medium text-black hover:text-gray-600">
