@@ -24,13 +24,40 @@ export default function Lobby() {
   const router = useRouter();
   const { socket, isConnected } = useSocket();
 
-  // Load username from localStorage if logged in
+  // Load username from localStorage if logged in and migrate old users
   useEffect(() => {
     const storedUser = localStorage.getItem("debatel_user");
     if (storedUser) {
       const user = JSON.parse(storedUser);
+      
+      // Check if user has old ELO (1000 or 1500) and reset to 0
+      const needsMigration = user.elo === 1000 || user.elo === 1500 || user.elo > 2000;
+      const migratedElo = needsMigration ? 0 : (user.elo !== undefined ? user.elo : 0);
+      
+      // Update session if migration happened
+      if (needsMigration) {
+        const updatedUser = {
+          ...user,
+          elo: migratedElo,
+          profileIcon: user.profileIcon || "👤",
+          profileBanner: user.profileBanner || "#3b82f6"
+        };
+        localStorage.setItem("debatel_user", JSON.stringify(updatedUser));
+        
+        // Also update in users array
+        const storedUsers = localStorage.getItem("debatel_users");
+        if (storedUsers) {
+          const users = JSON.parse(storedUsers);
+          const userIndex = users.findIndex((u: any) => u.username === user.username);
+          if (userIndex !== -1) {
+            users[userIndex].elo = migratedElo;
+            localStorage.setItem("debatel_users", JSON.stringify(users));
+          }
+        }
+      }
+      
       setUsername(user.username);
-      setUserElo(user.elo !== undefined ? user.elo : 0);
+      setUserElo(migratedElo);
       setProfileIcon(user.profileIcon || "👤");
       setProfileBanner(user.profileBanner || "#3b82f6");
       setIsLoggedIn(true);

@@ -38,13 +38,32 @@ export default function Login() {
         return;
       }
 
-      // Store logged-in user (migrate old users without elo/icon/banner)
+      // Migrate old users without elo/icon/banner and update in storage
+      const migratedElo = user.elo !== undefined ? user.elo : 0;
+      const migratedIcon = user.profileIcon || "👤";
+      const migratedBanner = user.profileBanner || "#3b82f6";
+
+      // Update the user in the users array if migration happened
+      if (user.elo === undefined || !user.profileIcon || !user.profileBanner) {
+        const userIndex = users.findIndex((u: any) => u.username === identifier || u.email === identifier);
+        if (userIndex !== -1) {
+          users[userIndex] = {
+            ...users[userIndex],
+            elo: migratedElo,
+            profileIcon: migratedIcon,
+            profileBanner: migratedBanner
+          };
+          localStorage.setItem("debatel_users", JSON.stringify(users));
+        }
+      }
+
+      // Store logged-in user session
       localStorage.setItem("debatel_user", JSON.stringify({
         username: user.username,
         email: user.email,
-        elo: user.elo !== undefined ? user.elo : 0,
-        profileIcon: user.profileIcon || "👤",
-        profileBanner: user.profileBanner || "#3b82f6"
+        elo: migratedElo,
+        profileIcon: migratedIcon,
+        profileBanner: migratedBanner
       }));
 
       // Trigger storage event for navbar update
