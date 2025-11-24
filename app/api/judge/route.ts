@@ -21,23 +21,43 @@ export async function POST(request: Request) {
     console.log("Player arguments:", playerArguments.length);
     console.log("Opponent arguments:", opponentArguments.length);
 
-    const prompt = `You are an expert debate judge. Evaluate the following debate and determine the winner based on argument quality, logic, evidence, and persuasiveness.
+    const prompt = `You are a professional debate judge with expertise in competitive debate formats. Your role is to provide fair, rigorous evaluation based on established debate criteria.
 
-Topic: ${topic}
-Question: ${description}
+DEBATE TOPIC: ${topic}
+RESOLUTION: ${description}
 
-Player (arguing ${playerSide.toUpperCase()}):
-${playerArguments.map((arg: any, i: number) => `${i + 1}. ${arg.text} (Response time: ${arg.time}s)`).join('\n')}
+PLAYER POSITION (arguing ${playerSide.toUpperCase()}):
+${playerArguments.map((arg: any, i: number) => `Argument ${i + 1}: ${arg.text}`).join('\n\n')}
 
-Opponent (arguing ${playerSide === 'for' ? 'AGAINST' : 'FOR'}):
-${opponentArguments.map((arg: any, i: number) => `${i + 1}. ${arg.text} (Response time: ${arg.time}s)`).join('\n')}
+OPPONENT POSITION (arguing ${playerSide === 'for' ? 'AGAINST' : 'FOR'}):
+${opponentArguments.map((arg: any, i: number) => `Argument ${i + 1}: ${arg.text}`).join('\n\n')}
 
-Evaluate each debater on:
-1. Argument Quality (0-30 points): Strength and relevance of arguments
-2. Logic & Reasoning (0-25 points): Coherence and logical consistency
-3. Evidence & Facts (0-25 points): Use of factual support and credible evidence
-4. Response Time (0-10 points): Efficiency and quick thinking
-5. Persuasiveness (0-10 points): Overall convincing power
+EVALUATION CRITERIA:
+
+1. ARGUMENT QUALITY (0-30 points)
+   - Strength and relevance of claims
+   - Direct engagement with the resolution
+   - Depth of analysis
+
+2. LOGIC & REASONING (0-25 points)
+   - Coherence of argumentation
+   - Logical consistency
+   - Valid inference and reasoning chains
+
+3. EVIDENCE & SUPPORT (0-25 points)
+   - Use of facts, examples, or reasoning
+   - Credibility and relevance of support
+   - Quality over quantity
+
+4. REBUTTAL & CLASH (0-10 points)
+   - Direct engagement with opponent's points
+   - Effective refutation
+
+5. PERSUASIVENESS & IMPACT (0-10 points)
+   - Overall convincing power
+   - Clarity and communication
+
+BE CRITICAL and THOROUGH. Do not award high scores unless truly earned. Look for logical fallacies, weak evidence, and poor argumentation. A score of 70+ should indicate excellent debate performance.
 
 Respond ONLY with a JSON object in this exact format:
 {
@@ -62,18 +82,18 @@ Respond ONLY with a JSON object in this exact format:
 }`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: "You are an expert debate judge. Respond only with valid JSON.",
+          content: "You are a highly critical professional debate judge with years of experience in competitive debate. You have high standards and only award high scores for truly excellent argumentation. Respond only with valid JSON.",
         },
         {
           role: "user",
           content: prompt,
         },
       ],
-      temperature: 0.3,
+      temperature: 0.2,
     });
 
     const responseText = completion.choices[0].message.content;

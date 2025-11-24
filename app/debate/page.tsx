@@ -108,41 +108,63 @@ function DebateRoom() {
     };
   }, []);
 
-  const generateOpponentResponse = () => {
-    const opponentMessages_pool = [
-      "The empirical evidence contradicts this position. Studies from peer-reviewed journals demonstrate that federal oversight has consistently produced superior outcomes in environmental policy coordination.",
-      "Your argument fails to address the constitutional framework. The Commerce Clause explicitly grants Congress authority over interstate matters, which environmental issues inherently are.",
-      "I must respectfully disagree. The data from the past three decades shows that state-level initiatives have been undermined by lack of coordination and regulatory arbitrage.",
-      "This perspective overlooks the economic externalities. Without federal standards, we create a race to the bottom where states compete by lowering environmental protections.",
-      "Historical precedent contradicts your position. The Clean Air Act and Clean Water Act demonstrate the effectiveness of federal environmental regulation.",
-      "Your reasoning ignores the tragedy of the commons. Interstate pollution requires interstate solutions, which only federal policy can provide.",
-      "The fundamental flaw in your logic is the assumption that localized decision-making produces optimal outcomes when dealing with systemic issues.",
-      "International comparisons clearly demonstrate that centralized regulatory frameworks achieve better results than fragmented approaches.",
-      "You're overlooking the critical issue of enforcement consistency, which can only be guaranteed through unified federal standards.",
-      "The market failures you're ignoring require coordinated intervention that individual states cannot provide independently.",
-      "Your position contradicts decades of economic research on collective action problems and regulatory capture at the state level.",
-      "The constitutional history you cite actually supports the opposite conclusion when examined in its full historical context.",
-      "Evidence from similar policy experiments shows that decentralized approaches consistently fail to address cross-border spillover effects.",
-      "The data clearly indicates that race-to-the-bottom dynamics emerge when regulatory authority is devolved to competing jurisdictions.",
-      "Your framework ignores the information asymmetries that make state-level regulation inherently less effective than federal oversight.",
-      "The precedent you reference has been superseded by more recent jurisprudence that recognizes the necessity of federal coordination.",
-      "Research demonstrates that compliance costs actually decrease under unified federal standards compared to navigating 50 different state regimes.",
-      "The efficiency argument you make fails to account for the coordination costs and regulatory arbitrage that fragment state systems.",
-      "Your position relies on assumptions about state capacity that empirical evidence consistently contradicts.",
-      "The success stories you cite are statistical outliers that don't represent the typical outcomes of decentralized policy implementation.",
-    ];
+  const generateOpponentResponse = async () => {
+    try {
+      // Extract player and opponent arguments from messages
+      const playerArgs = messages.filter(m => m.sender === "You").map(m => ({ text: m.text, time: m.time }));
+      const opponentArgs = messages.filter(m => m.sender === "Opponent").map(m => ({ text: m.text, time: m.time }));
+      
+      const response = await fetch('/api/opponent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: prompt.topic,
+          description: prompt.description,
+          opponentSide: position === "for" ? "against" : "for",
+          playerArguments: playerArgs,
+          opponentArguments: opponentArgs,
+          turnNumber: messages.filter(m => m.sender === "Opponent").length + 1,
+        }),
+      });
 
-    const opponentMsg = {
-      sender: "Opponent",
-      text: opponentMessages_pool[Math.floor(Math.random() * opponentMessages_pool.length)],
-      time: Math.floor(Math.random() * timePerTurn),
-      isYourTurn: false
-    };
+      if (response.ok) {
+        const data = await response.json();
+        const opponentMsg = {
+          sender: "Opponent",
+          text: data.argument,
+          time: Math.floor(Math.random() * (timePerTurn / 2)) + Math.floor(timePerTurn / 4), // Random time between 25-75% of turn time
+          isYourTurn: false
+        };
 
-    setMessages(prev => [...prev, opponentMsg]);
-    const opponentPoints = Math.floor(Math.random() * 25) + 20;
-    setOpponentScore(prev => prev + opponentPoints);
-    completeTurn("opponent");
+        setMessages(prev => [...prev, opponentMsg]);
+        const opponentPoints = Math.floor(Math.random() * 25) + 20;
+        setOpponentScore(prev => prev + opponentPoints);
+        completeTurn("opponent");
+      } else {
+        // Fallback to simple response if API fails
+        const opponentMsg = {
+          sender: "Opponent",
+          text: "I maintain my position on this resolution. The evidence supports the argument that this approach yields better outcomes based on empirical data and logical reasoning.",
+          time: Math.floor(Math.random() * timePerTurn),
+          isYourTurn: false
+        };
+        setMessages(prev => [...prev, opponentMsg]);
+        setOpponentScore(prev => prev + 22);
+        completeTurn("opponent");
+      }
+    } catch (error) {
+      console.error("Error generating opponent response:", error);
+      // Fallback
+      const opponentMsg = {
+        sender: "Opponent",
+        text: "I maintain my position on this resolution. The evidence supports my argument.",
+        time: Math.floor(Math.random() * timePerTurn),
+        isYourTurn: false
+      };
+      setMessages(prev => [...prev, opponentMsg]);
+      setOpponentScore(prev => prev + 22);
+      completeTurn("opponent");
+    }
   };
 
   useEffect(() => {
@@ -352,13 +374,37 @@ function DebateRoom() {
         setYourScore(judgement.playerScore);
         setOpponentScore(judgement.opponentScore);
         
-        // Update ELO if player wins and is logged in
-        if (judgement.winner === "player" && gameType === "ranked") {
+        // Update ELO based on performance (dynamic system)
+        if (gameType === "ranked") {
           const storedUser = localStorage.getItem("debatel_user");
           if (storedUser) {
             const user = JSON.parse(storedUser);
-            const eloGain = 30; // Fixed ELO gain per win
-            const newElo = (user.elo || 0) + eloGain;
+            
+            // Calculate ELO change based on score difference
+            const scoreDiff = judgement.playerScore - judgement.opponentScore;
+            let eloChange = 0;
+            
+            if (judgement.winner === "player") {
+              // Win: Base 30 ELO + bonus for dominant wins
+              eloChange = 30;
+              if (scoreDiff >= 30) eloChange += 15; // Dominant win (45 total)
+              else if (scoreDiff >= 20) eloChange += 10; // Strong win (40 total)
+              else if (scoreDiff >= 10) eloChange += 5; // Solid win (35 total)
+              // Close win (scoreDiff < 10) gets base 30
+            } else if (judgement.winner === "opponent") {
+              // Loss: Penalty based on how badly you lost
+              if (scoreDiff <= -30) eloChange = -30; // Dominated (-30)
+              else if (scoreDiff <= -20) eloChange = -25; // Clear loss (-25)
+              else if (scoreDiff <= -10) eloChange = -20; // Loss (-20)
+              else eloChange = -15; // Close loss (-15)
+            } else {
+              // Tie: Small gain for high-scoring ties, small loss for low-scoring ties
+              if (judgement.playerScore >= 70) eloChange = 5;
+              else if (judgement.playerScore >= 60) eloChange = 0;
+              else eloChange = -5;
+            }
+            
+            const newElo = Math.max(0, (user.elo || 0) + eloChange); // Can't go below 0
             
             // Update session
             user.elo = newElo;
@@ -374,12 +420,21 @@ function DebateRoom() {
                 localStorage.setItem("debatel_users", JSON.stringify(users));
               }
             }
+            
+            // Store ELO change for display
+            (window as any).lastEloChange = eloChange;
           }
         }
         
+        // Get ELO change for display
+        const eloChange = (window as any).lastEloChange || 0;
+        const eloText = gameType === "ranked" && eloChange !== 0 
+          ? `\n\n${eloChange > 0 ? '+' : ''}${eloChange} ELO` 
+          : '';
+        
         const resultMsg = {
           sender: "AI Judge",
-          text: `${judgement.winner === "player" ? "You win!" : judgement.winner === "opponent" ? "Opponent wins!" : "It's a tie!"}\n\nFinal Scores: You: ${judgement.playerScore} | Opponent: ${judgement.opponentScore}\n\nReasoning: ${judgement.reasoning}${judgement.winner === "player" && gameType === "ranked" ? "\n\n+30 ELO" : ""}`,
+          text: `${judgement.winner === "player" ? "You win!" : judgement.winner === "opponent" ? "Opponent wins!" : "It's a tie!"}\n\nFinal Scores: You: ${judgement.playerScore} | Opponent: ${judgement.opponentScore}\n\nReasoning: ${judgement.reasoning}${eloText}`,
           time: 0,
           isYourTurn: false
         };

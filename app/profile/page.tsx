@@ -69,6 +69,28 @@ export default function Profile() {
     setTimeout(() => setSuccess(false), 3000);
   };
 
+  const handleResetElo = () => {
+    if (!confirm("Are you sure you want to reset your ELO to 0? This cannot be undone.")) {
+      return;
+    }
+    
+    const updatedUser = { ...user, elo: 0 };
+    localStorage.setItem("debatel_user", JSON.stringify(updatedUser));
+
+    const storedUsers = localStorage.getItem("debatel_users");
+    if (storedUsers) {
+      const users = JSON.parse(storedUsers);
+      const userIndex = users.findIndex((u: any) => u.username === user.username);
+      if (userIndex !== -1) {
+        users[userIndex] = { ...users[userIndex], elo: 0 };
+        localStorage.setItem("debatel_users", JSON.stringify(users));
+      }
+    }
+
+    setUser(updatedUser);
+    window.location.reload();
+  };
+
   if (!user) {
     return <div className="min-h-screen bg-gray-100 flex items-center justify-center">Loading...</div>;
   }
@@ -164,6 +186,18 @@ export default function Profile() {
           >
             Back to Lobby
           </Link>
+        </div>
+
+        {/* Reset ELO Section */}
+        <div className="mt-8 border-2 border-red-500 bg-red-50 p-6">
+          <h3 className="mb-2 text-lg font-bold text-red-700">Danger Zone</h3>
+          <p className="mb-4 text-sm text-gray-700">Reset your competitive ranking to start fresh.</p>
+          <button
+            onClick={handleResetElo}
+            className="rounded-sm bg-red-600 px-6 py-2 font-semibold text-white transition hover:bg-red-700"
+          >
+            Reset ELO to 0
+          </button>
         </div>
       </main>
     </div>
