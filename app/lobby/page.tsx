@@ -16,8 +16,9 @@ export default function Lobby() {
   const [selectedSide, setSelectedSide] = useState<DebateSide>("for");
   const [selectedType, setSelectedType] = useState<GameType>("practice");
   const [username, setUsername] = useState(() => `Player${Math.floor(Math.random() * 9999)}`);
-  const [userElo, setUserElo] = useState(1000);
+  const [userElo, setUserElo] = useState(0);
   const [profileIcon, setProfileIcon] = useState("👤");
+  const [profileBanner, setProfileBanner] = useState("#3b82f6");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const router = useRouter();
   const { socket, isConnected } = useSocket();
@@ -28,8 +29,9 @@ export default function Lobby() {
     if (storedUser) {
       const user = JSON.parse(storedUser);
       setUsername(user.username);
-      setUserElo(user.elo || 1000);
+      setUserElo(user.elo !== undefined ? user.elo : 0);
       setProfileIcon(user.profileIcon || "👤");
+      setProfileBanner(user.profileBanner || "#3b82f6");
       setIsLoggedIn(true);
     } else {
       setIsLoggedIn(false);
@@ -43,7 +45,7 @@ export default function Lobby() {
     socket.on("match-found", ({ matchId, opponent, yourSide, opponentSide, goesFirst, topicIndex }) => {
       console.log("Match found!", { matchId, opponent, yourSide, goesFirst, topicIndex });
       setInQueue(false); // Stop queue timer when match is found
-      router.push(`/debate?mode=${selectedMode}&side=${yourSide}&matchId=${matchId}&multiplayer=true&goesFirst=${goesFirst}&type=${selectedType}&opponentUsername=${encodeURIComponent(opponent.username)}&opponentElo=${opponent.elo || 1000}&opponentIcon=${encodeURIComponent(opponent.icon || "👤")}&userElo=${userElo}&userIcon=${encodeURIComponent(profileIcon)}&topicIndex=${topicIndex}`);
+      router.push(`/debate?mode=${selectedMode}&side=${yourSide}&matchId=${matchId}&multiplayer=true&goesFirst=${goesFirst}&type=${selectedType}&opponentUsername=${encodeURIComponent(opponent.username)}&opponentElo=${opponent.elo !== undefined ? opponent.elo : 0}&opponentIcon=${encodeURIComponent(opponent.icon || "👤")}&opponentBanner=${encodeURIComponent(opponent.banner || "#3b82f6")}&userElo=${userElo}&userIcon=${encodeURIComponent(profileIcon)}&userBanner=${encodeURIComponent(profileBanner)}&topicIndex=${topicIndex}`);
     });
 
     socket.on("queue-status", ({ position }) => {
@@ -104,7 +106,8 @@ export default function Lobby() {
       username,
       type: selectedType,
       elo: userElo,
-      icon: profileIcon
+      icon: profileIcon,
+      banner: profileBanner
     });
   };
 

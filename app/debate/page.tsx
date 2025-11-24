@@ -17,10 +17,12 @@ function DebateRoom() {
   const goesFirst = searchParams.get("goesFirst") === "true";
   const gameType = searchParams.get("type") || "practice";
   const opponentUsername = searchParams.get("opponentUsername") || "Opponent";
-  const opponentElo = parseInt(searchParams.get("opponentElo") || "1000");
+  const opponentElo = parseInt(searchParams.get("opponentElo") || "0");
   const opponentIcon = searchParams.get("opponentIcon") || "👤";
-  const userElo = parseInt(searchParams.get("userElo") || "1000");
+  const opponentBanner = searchParams.get("opponentBanner") || "#3b82f6";
+  const userElo = parseInt(searchParams.get("userElo") || "0");
   const userIcon = searchParams.get("userIcon") || "👤";
+  const userBanner = searchParams.get("userBanner") || "#3b82f6";
   const topicIndex = searchParams.get("topicIndex");
   const timePerTurn = mode === "speed" ? 30 : 60;
   const totalRounds = 5;
@@ -96,7 +98,7 @@ function DebateRoom() {
       socket.off("opponent-disconnected");
       socket.off("debate-ended");
     };
-  }, [socket, isMultiplayer, matchId, timePerTurn]);
+  }, [socket, isMultiplayer, matchId]); // Removed timePerTurn to prevent re-registration
 
   useEffect(() => {
     return () => {
@@ -350,9 +352,34 @@ function DebateRoom() {
         setYourScore(judgement.playerScore);
         setOpponentScore(judgement.opponentScore);
         
+        // Update ELO if player wins and is logged in
+        if (judgement.winner === "player" && gameType === "ranked") {
+          const storedUser = localStorage.getItem("debatel_user");
+          if (storedUser) {
+            const user = JSON.parse(storedUser);
+            const eloGain = 25; // Fixed ELO gain per win
+            const newElo = (user.elo || 0) + eloGain;
+            
+            // Update session
+            user.elo = newElo;
+            localStorage.setItem("debatel_user", JSON.stringify(user));
+            
+            // Update in users list
+            const storedUsers = localStorage.getItem("debatel_users");
+            if (storedUsers) {
+              const users = JSON.parse(storedUsers);
+              const userIndex = users.findIndex((u: any) => u.username === user.username);
+              if (userIndex !== -1) {
+                users[userIndex].elo = newElo;
+                localStorage.setItem("debatel_users", JSON.stringify(users));
+              }
+            }
+          }
+        }
+        
         const resultMsg = {
           sender: "AI Judge",
-          text: `${judgement.winner === "player" ? "You win!" : judgement.winner === "opponent" ? "Opponent wins!" : "It's a tie!"}\n\nFinal Scores: You: ${judgement.playerScore} | Opponent: ${judgement.opponentScore}\n\nReasoning: ${judgement.reasoning}`,
+          text: `${judgement.winner === "player" ? "You win!" : judgement.winner === "opponent" ? "Opponent wins!" : "It's a tie!"}\n\nFinal Scores: You: ${judgement.playerScore} | Opponent: ${judgement.opponentScore}\n\nReasoning: ${judgement.reasoning}${judgement.winner === "player" && gameType === "ranked" ? "\n\n+25 ELO" : ""}`,
           time: 0,
           isYourTurn: false
         };
@@ -459,23 +486,45 @@ function DebateRoom() {
               <div className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">Resolution</div>
               <h2 className="mb-2 text-lg font-bold text-black">{prompt.topic}</h2>
               <p className="text-sm text-gray-600">{prompt.description}</p>
-              <div className="mt-4 flex items-center gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="border-l-4 border-black bg-black px-3 py-2 text-xl font-bold text-white flex items-center gap-2">
-                    <span>{userIcon}</span> YOU: {position.toUpperCase()}
-                  </span>
-                  <span className={`text-xs font-semibold px-3 ${getRankByElo(userElo).color}`}>
-                    {getRankByElo(userElo).icon} {getRankByElo(userElo).name} • {userElo} ELO
-                  </span>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {/* Your Card */}
+                <div className="overflow-hidden rounded border-2 border-black">
+                  <div 
+                    className="h-16 w-full" 
+                    style={{ backgroundColor: userBanner }}
+                  ></div>
+                  <div className="bg-white p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-3xl">{userIcon}</span>
+                      <div className="flex-1">
+                        <div className="font-bold text-black text-sm">YOU</div>
+                        <div className="text-xs text-gray-600">{position.toUpperCase()}</div>
+                      </div>
+                    </div>
+                    <div className={`text-xs font-semibold ${getRankByElo(userElo).color}`}>
+                      {getRankByElo(userElo).icon} {getRankByElo(userElo).name} • {userElo} ELO
+                    </div>
+                  </div>
                 </div>
-                <span className="text-gray-400 text-2xl">vs</span>
-                <div className="flex flex-col gap-1">
-                  <span className="border-l-4 border-gray-400 bg-gray-200 px-3 py-2 text-xl font-bold text-gray-700 flex items-center gap-2">
-                    <span>{opponentIcon}</span> {opponentUsername.toUpperCase()}: {position === "for" ? "AGAINST" : "FOR"}
-                  </span>
-                  <span className={`text-xs font-semibold px-3 ${getRankByElo(opponentElo).color}`}>
-                    {getRankByElo(opponentElo).icon} {getRankByElo(opponentElo).name} • {opponentElo} ELO
-                  </span>
+
+                {/* Opponent Card */}
+                <div className="overflow-hidden rounded border-2 border-gray-400">
+                  <div 
+                    className="h-16 w-full" 
+                    style={{ backgroundColor: opponentBanner }}
+                  ></div>
+                  <div className="bg-gray-50 p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-3xl">{opponentIcon}</span>
+                      <div className="flex-1">
+                        <div className="font-bold text-gray-700 text-sm">{opponentUsername.toUpperCase()}</div>
+                        <div className="text-xs text-gray-600">{position === "for" ? "AGAINST" : "FOR"}</div>
+                      </div>
+                    </div>
+                    <div className={`text-xs font-semibold ${getRankByElo(opponentElo).color}`}>
+                      {getRankByElo(opponentElo).icon} {getRankByElo(opponentElo).name} • {opponentElo} ELO
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

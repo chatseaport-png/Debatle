@@ -42,7 +42,7 @@ export default function Login() {
       localStorage.setItem("debatel_user", JSON.stringify({
         username: user.username,
         email: user.email,
-        elo: user.elo || 1000,
+        elo: user.elo !== undefined ? user.elo : 0,
         profileIcon: user.profileIcon || "👤",
         profileBanner: user.profileBanner || "#3b82f6"
       }));

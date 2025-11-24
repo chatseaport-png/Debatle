@@ -48,7 +48,7 @@ app.prepare().then(() => {
     console.log('User connected:', socket.id);
 
     // Join matchmaking queue
-    socket.on('join-queue', ({ mode, side, username, type = 'practice', elo = 1000, icon = '👤' }) => {
+    socket.on('join-queue', ({ mode, side, username, type = 'practice', elo = 0, icon = '👤', banner = '#3b82f6' }) => {
       console.log(`${username} (${elo} ELO) joined ${type} ${mode} queue (${side} side)`);
       
       const queue = matchmakingQueue[type][mode];
@@ -80,7 +80,7 @@ app.prepare().then(() => {
         // Notify both players
         io.to(opponent.socketId).emit('match-found', {
           matchId,
-          opponent: { username, elo, icon },
+          opponent: { username, elo, icon, banner },
           yourSide: opponent.side,
           opponentSide: side,
           goesFirst: opponent.side === 'for',
@@ -89,7 +89,7 @@ app.prepare().then(() => {
         
         io.to(socket.id).emit('match-found', {
           matchId,
-          opponent: { username: opponent.username, elo: opponent.elo, icon: opponent.icon },
+          opponent: { username: opponent.username, elo: opponent.elo, icon: opponent.icon, banner: opponent.banner },
           yourSide: side,
           opponentSide: opponent.side,
           goesFirst: side === 'for',
@@ -103,7 +103,7 @@ app.prepare().then(() => {
         console.log(`${type} match created: ${matchId}`);
       } else {
         // Add to queue
-        queue.push({ socketId: socket.id, username, side, type, elo, icon });
+        queue.push({ socketId: socket.id, username, side, type, elo, icon, banner });
         socket.emit('queue-status', { position: queue.length });
       }
     });

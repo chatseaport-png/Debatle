@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 export default function Navbar() {
   const [user, setUser] = useState<{ username: string; email: string } | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -25,9 +27,24 @@ export default function Navbar() {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+
+    if (dropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [dropdownOpen]);
+
   const handleLogout = () => {
     localStorage.removeItem("debatel_user");
     setUser(null);
+    setDropdownOpen(false);
     router.push("/");
   };
 
@@ -43,7 +60,7 @@ export default function Navbar() {
           <div className="flex items-center gap-3">
             <Link
               href="/contact"
-              className="text-sm font-semibold text-gray-700 hover:text-black"
+              className="px-4 py-2 text-sm font-medium text-gray-700 transition hover:text-black"
             >
               Support
             </Link>
@@ -61,15 +78,24 @@ export default function Navbar() {
                 >
                   Profile
                 </Link>
-                <span className="px-4 py-2 text-sm font-semibold text-black">
-                  {user.username}
-                </span>
-                <button
-                  onClick={handleLogout}
-                  className="rounded-sm bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-300"
-                >
-                  Logout
-                </button>
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                    className="px-4 py-2 text-sm font-semibold text-black hover:text-gray-700 transition"
+                  >
+                    {user.username} ▼
+                  </button>
+                  {dropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-48 rounded-sm border border-gray-300 bg-white shadow-lg z-50">
+                      <button
+                        onClick={handleLogout}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 transition"
+                      >
+                        Logout
+                      </button>
+                    </div>
+                  )}
+                </div>
               </>
             ) : (
               <>

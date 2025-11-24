@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ranks } from "@/lib/rankSystem";
 
 const leaderboardData = [
   { rank: 1, username: "You", elo: 0, wins: 0, losses: 0, winRate: 0 },
@@ -30,6 +31,30 @@ export default function Leaderboard() {
         <div className="mb-12 border-b border-gray-200 pb-8">
           <h1 className="text-5xl font-bold text-black">Global Rankings</h1>
           <p className="mt-3 text-gray-600">Top debaters by ELO rating</p>
+        </div>
+
+        {/* Rank Tiers */}
+        <div className="mb-8 border border-gray-200 bg-white p-6">
+          <h2 className="mb-4 text-2xl font-bold text-black">Rank Tiers</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {ranks.map((rank) => (
+              <div
+                key={rank.name}
+                className="flex items-center gap-3 rounded border-2 border-gray-200 p-4 transition hover:border-gray-400"
+                style={{ borderColor: rank.color }}
+              >
+                <span className="text-3xl">{rank.icon}</span>
+                <div>
+                  <div className="font-bold" style={{ color: rank.color }}>
+                    {rank.name}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {rank.maxElo ? `${rank.minElo}-${rank.maxElo}` : `${rank.minElo}+`} ELO
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="border border-gray-200 bg-white">

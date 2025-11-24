@@ -73,7 +73,7 @@ export default function Profile() {
     return <div className="min-h-screen bg-gray-100 flex items-center justify-center">Loading...</div>;
   }
 
-  const rank = getRankByElo(user.elo || 1000);
+  const rank = getRankByElo(user.elo !== undefined ? user.elo : 0);
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -98,7 +98,7 @@ export default function Profile() {
                 <div>
                   <div className="text-2xl font-bold text-black">{user.username}</div>
                   <div className={`text-sm font-semibold ${rank.color}`}>
-                    {rank.icon} {rank.name} • {user.elo || 1000} ELO
+                    {rank.icon} {rank.name} • {user.elo !== undefined ? user.elo : 0} ELO
                   </div>
                 </div>
               </div>

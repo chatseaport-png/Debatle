@@ -62,7 +62,7 @@ export default function Register() {
         email,
         password, // In production, this should be hashed
         createdAt: new Date().toISOString(),
-        elo: 1000, // Starting ELO
+        elo: 0, // Starting ELO
         profileIcon: "👤", // Default icon
         profileBanner: "#3b82f6" // Default banner color (blue)
       };
