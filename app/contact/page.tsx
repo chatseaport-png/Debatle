@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Navbar from "../components/Navbar";
 
-export default function Contact() {
+export default function Support() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -29,7 +29,7 @@ export default function Contact() {
 
       <main className="mx-auto max-w-2xl px-4 py-12">
         <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-black">Contact Us</h1>
+          <h1 className="text-4xl font-bold text-black">Support</h1>
           <p className="mt-3 text-gray-600">Have feedback or questions? Get in touch.</p>
         </div>
 
@@ -98,8 +98,8 @@ export default function Contact() {
 
         <div className="mt-8 text-center text-sm text-gray-600">
           <p>Or reach us directly at:</p>
-          <a href="mailto:contact@debatel.com" className="font-semibold text-black hover:underline">
-            contact@debatel.com
+          <a href="mailto:support@debatel.com" className="font-semibold text-black hover:underline">
+            support@debatel.com
           </a>
         </div>
       </main>

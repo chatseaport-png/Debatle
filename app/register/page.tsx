@@ -61,7 +61,10 @@ export default function Register() {
         username,
         email,
         password, // In production, this should be hashed
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        elo: 1000, // Starting ELO
+        profileIcon: "👤", // Default icon
+        profileBanner: "#3b82f6" // Default banner color (blue)
       };
 
       users.push(newUser);
@@ -70,7 +73,10 @@ export default function Register() {
       // Store logged-in user
       localStorage.setItem("debatel_user", JSON.stringify({
         username: newUser.username,
-        email: newUser.email
+        email: newUser.email,
+        elo: newUser.elo,
+        profileIcon: newUser.profileIcon,
+        profileBanner: newUser.profileBanner
       }));
 
       // Trigger storage event for navbar update

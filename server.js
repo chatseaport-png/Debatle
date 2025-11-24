@@ -48,8 +48,8 @@ app.prepare().then(() => {
     console.log('User connected:', socket.id);
 
     // Join matchmaking queue
-    socket.on('join-queue', ({ mode, side, username, type = 'practice' }) => {
-      console.log(`${username} joined ${type} ${mode} queue (${side} side)`);
+    socket.on('join-queue', ({ mode, side, username, type = 'practice', elo = 1000, icon = '👤' }) => {
+      console.log(`${username} (${elo} ELO) joined ${type} ${mode} queue (${side} side)`);
       
       const queue = matchmakingQueue[type][mode];
       
@@ -58,11 +58,15 @@ app.prepare().then(() => {
         const opponent = queue.shift();
         const matchId = `match-${Date.now()}`;
         
+        // Generate a random topic index that both players will use
+        const topicIndex = Math.floor(Math.random() * 1000000);
+        
         // Create match
         const match = {
           id: matchId,
           mode,
           type,
+          topicIndex,
           player1: { id: opponent.socketId, username: opponent.username, side: opponent.side },
           player2: { id: socket.id, username, side },
           currentTurn: opponent.side === 'for' ? opponent.socketId : socket.id,
@@ -76,18 +80,20 @@ app.prepare().then(() => {
         // Notify both players
         io.to(opponent.socketId).emit('match-found', {
           matchId,
-          opponent: { username },
+          opponent: { username, elo, icon },
           yourSide: opponent.side,
           opponentSide: side,
-          goesFirst: opponent.side === 'for'
+          goesFirst: opponent.side === 'for',
+          topicIndex
         });
         
         io.to(socket.id).emit('match-found', {
           matchId,
-          opponent: { username: opponent.username },
+          opponent: { username: opponent.username, elo: opponent.elo, icon: opponent.icon },
           yourSide: side,
           opponentSide: opponent.side,
-          goesFirst: side === 'for'
+          goesFirst: side === 'for',
+          topicIndex
         });
         
         // Join both to match room
@@ -97,7 +103,7 @@ app.prepare().then(() => {
         console.log(`${type} match created: ${matchId}`);
       } else {
         // Add to queue
-        queue.push({ socketId: socket.id, username, side, type });
+        queue.push({ socketId: socket.id, username, side, type, elo, icon });
         socket.emit('queue-status', { position: queue.length });
       }
     });

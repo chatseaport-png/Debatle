@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { getRandomPrompt } from "@/lib/debatePrompts";
+import { getRandomPrompt, getPromptByIndex } from "@/lib/debatePrompts";
 import { useSocket } from "@/lib/socket";
+import { getRankByElo } from "@/lib/rankSystem";
 
 function DebateRoom() {
   const searchParams = useSearchParams();
@@ -15,11 +16,19 @@ function DebateRoom() {
   const isMultiplayer = searchParams.get("multiplayer") === "true";
   const goesFirst = searchParams.get("goesFirst") === "true";
   const gameType = searchParams.get("type") || "practice";
+  const opponentUsername = searchParams.get("opponentUsername") || "Opponent";
+  const opponentElo = parseInt(searchParams.get("opponentElo") || "1000");
+  const opponentIcon = searchParams.get("opponentIcon") || "👤";
+  const userElo = parseInt(searchParams.get("userElo") || "1000");
+  const userIcon = searchParams.get("userIcon") || "👤";
+  const topicIndex = searchParams.get("topicIndex");
   const timePerTurn = mode === "speed" ? 30 : 60;
   const totalRounds = 5;
 
   const { socket } = useSocket();
-  const [prompt] = useState(() => getRandomPrompt());
+  const [prompt] = useState(() => 
+    topicIndex ? getPromptByIndex(parseInt(topicIndex)) : getRandomPrompt()
+  );
   const [position] = useState<"for" | "against">(() => 
     userSide as "for" | "against"
   );
@@ -451,13 +460,23 @@ function DebateRoom() {
               <h2 className="mb-2 text-lg font-bold text-black">{prompt.topic}</h2>
               <p className="text-sm text-gray-600">{prompt.description}</p>
               <div className="mt-4 flex items-center gap-3">
-                <span className="border-l-4 border-black bg-black px-3 py-2 text-xl font-bold text-white">
-                  YOU: {position.toUpperCase()}
-                </span>
-                <span className="text-gray-400">vs</span>
-                <span className="border-l-4 border-gray-400 bg-gray-200 px-3 py-2 text-xl font-bold text-gray-700">
-                  OPPONENT: {position === "for" ? "AGAINST" : "FOR"}
-                </span>
+                <div className="flex flex-col gap-1">
+                  <span className="border-l-4 border-black bg-black px-3 py-2 text-xl font-bold text-white flex items-center gap-2">
+                    <span>{userIcon}</span> YOU: {position.toUpperCase()}
+                  </span>
+                  <span className={`text-xs font-semibold px-3 ${getRankByElo(userElo).color}`}>
+                    {getRankByElo(userElo).icon} {getRankByElo(userElo).name} • {userElo} ELO
+                  </span>
+                </div>
+                <span className="text-gray-400 text-2xl">vs</span>
+                <div className="flex flex-col gap-1">
+                  <span className="border-l-4 border-gray-400 bg-gray-200 px-3 py-2 text-xl font-bold text-gray-700 flex items-center gap-2">
+                    <span>{opponentIcon}</span> {opponentUsername.toUpperCase()}: {position === "for" ? "AGAINST" : "FOR"}
+                  </span>
+                  <span className={`text-xs font-semibold px-3 ${getRankByElo(opponentElo).color}`}>
+                    {getRankByElo(opponentElo).icon} {getRankByElo(opponentElo).name} • {opponentElo} ELO
+                  </span>
+                </div>
               </div>
             </div>
 

@@ -38,10 +38,13 @@ export default function Login() {
         return;
       }
 
-      // Store logged-in user
+      // Store logged-in user (migrate old users without elo/icon/banner)
       localStorage.setItem("debatel_user", JSON.stringify({
         username: user.username,
-        email: user.email
+        email: user.email,
+        elo: user.elo || 1000,
+        profileIcon: user.profileIcon || "👤",
+        profileBanner: user.profileBanner || "#3b82f6"
       }));
 
       // Trigger storage event for navbar update

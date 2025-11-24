@@ -16,6 +16,8 @@ export default function Lobby() {
   const [selectedSide, setSelectedSide] = useState<DebateSide>("for");
   const [selectedType, setSelectedType] = useState<GameType>("practice");
   const [username, setUsername] = useState(() => `Player${Math.floor(Math.random() * 9999)}`);
+  const [userElo, setUserElo] = useState(1000);
+  const [profileIcon, setProfileIcon] = useState("👤");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const router = useRouter();
   const { socket, isConnected } = useSocket();
@@ -26,6 +28,8 @@ export default function Lobby() {
     if (storedUser) {
       const user = JSON.parse(storedUser);
       setUsername(user.username);
+      setUserElo(user.elo || 1000);
+      setProfileIcon(user.profileIcon || "👤");
       setIsLoggedIn(true);
     } else {
       setIsLoggedIn(false);
@@ -36,10 +40,10 @@ export default function Lobby() {
     if (!socket) return;
 
     // Listen for match found
-    socket.on("match-found", ({ matchId, opponent, yourSide, opponentSide, goesFirst }) => {
-      console.log("Match found!", { matchId, opponent, yourSide, goesFirst });
+    socket.on("match-found", ({ matchId, opponent, yourSide, opponentSide, goesFirst, topicIndex }) => {
+      console.log("Match found!", { matchId, opponent, yourSide, goesFirst, topicIndex });
       setInQueue(false); // Stop queue timer when match is found
-      router.push(`/debate?mode=${selectedMode}&side=${yourSide}&matchId=${matchId}&multiplayer=true&goesFirst=${goesFirst}&type=${selectedType}`);
+      router.push(`/debate?mode=${selectedMode}&side=${yourSide}&matchId=${matchId}&multiplayer=true&goesFirst=${goesFirst}&type=${selectedType}&opponentUsername=${encodeURIComponent(opponent.username)}&opponentElo=${opponent.elo || 1000}&opponentIcon=${encodeURIComponent(opponent.icon || "👤")}&userElo=${userElo}&userIcon=${encodeURIComponent(profileIcon)}&topicIndex=${topicIndex}`);
     });
 
     socket.on("queue-status", ({ position }) => {
@@ -98,7 +102,9 @@ export default function Lobby() {
       mode: selectedMode,
       side: selectedSide,
       username,
-      type: selectedType
+      type: selectedType,
+      elo: userElo,
+      icon: profileIcon
     });
   };
 

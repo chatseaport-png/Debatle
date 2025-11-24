@@ -43,9 +43,9 @@ export default function Navbar() {
           <div className="flex items-center gap-3">
             <Link
               href="/contact"
-              className="px-4 py-2 text-sm font-medium text-gray-700 transition hover:text-black"
+              className="text-sm font-semibold text-gray-700 hover:text-black"
             >
-              Contact
+              Support
             </Link>
             {user ? (
               <>
@@ -54,6 +54,12 @@ export default function Navbar() {
                   className="px-4 py-2 text-sm font-medium text-gray-700 transition hover:text-black"
                 >
                   Lobby
+                </Link>
+                <Link
+                  href="/profile"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 transition hover:text-black"
+                >
+                  Profile
                 </Link>
                 <span className="px-4 py-2 text-sm font-semibold text-black">
                   {user.username}

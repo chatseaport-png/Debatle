@@ -250,6 +250,10 @@ export function getRandomPrompt(): DebatePrompt {
   return debatePrompts[Math.floor(Math.random() * debatePrompts.length)];
 }
 
+export function getPromptByIndex(index: number): DebatePrompt {
+  return debatePrompts[index % debatePrompts.length];
+}
+
 export type GameMode = "speed" | "standard";
 
 export interface GameModeConfig {
