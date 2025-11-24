@@ -98,7 +98,7 @@ export default function Profile() {
                 <div>
                   <div className="text-2xl font-bold text-black">{user.username}</div>
                   <div className={`text-sm font-semibold ${rank.color}`}>
-                    {rank.icon} {rank.name} • {user.elo !== undefined ? user.elo : 0} ELO
+                    {rank.icon} {rank.displayName} • {user.elo !== undefined ? user.elo : 0} ELO
                   </div>
                 </div>
               </div>

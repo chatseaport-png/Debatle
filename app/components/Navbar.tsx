@@ -81,9 +81,9 @@ export default function Navbar() {
                 <div className="relative" ref={dropdownRef}>
                   <button
                     onClick={() => setDropdownOpen(!dropdownOpen)}
-                    className="px-4 py-2 text-sm font-semibold text-black hover:text-gray-700 transition"
+                    className="px-4 py-2 text-sm font-bold text-black hover:text-gray-700 transition"
                   >
-                    {user.username} ▼
+                    {user.username}
                   </button>
                   {dropdownOpen && (
                     <div className="absolute right-0 mt-2 w-48 rounded-sm border border-gray-300 bg-white shadow-lg z-50">

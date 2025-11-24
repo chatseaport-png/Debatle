@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSocket } from "@/lib/socket";
+import { getRankByElo } from "@/lib/rankSystem";
 
 type GameMode = "speed" | "standard";
 type DebateSide = "for" | "against";
@@ -138,25 +139,54 @@ export default function Lobby() {
       </nav>
 
       <main className="mx-auto max-w-3xl px-4 py-12">
+        {/* Rank Progress - Valorant Style */}
+        {isLoggedIn && selectedType === "ranked" && (
+          <div className="mb-6 border-2 border-black bg-white p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <div className="text-2xl font-bold" style={{ color: getRankByElo(userElo).bgColor }}>
+                  {getRankByElo(userElo).icon} {getRankByElo(userElo).displayName}
+                </div>
+                <div className="text-sm text-gray-600">{userElo} ELO</div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm font-semibold text-gray-700">
+                  {100 - getRankByElo(userElo).progress} ELO to {getRankByElo(userElo).name} {getRankByElo(userElo).subRank + 1}
+                </div>
+              </div>
+            </div>
+            {/* Progress Bar */}
+            <div className="relative h-3 overflow-hidden rounded-full bg-gray-200">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${getRankByElo(userElo).progress}%`,
+                  backgroundColor: getRankByElo(userElo).bgColor,
+                }}
+              ></div>
+            </div>
+          </div>
+        )}
+
         {/* Player Stats */}
         {isLoggedIn && (
           <div className="mb-6 border border-gray-300 bg-white p-8">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-3xl font-bold text-black">1,450</div>
+                <div className="text-3xl font-bold text-black">{userElo}</div>
                 <div className="text-xs uppercase tracking-wide text-gray-600">ELO Rating</div>
               </div>
-              <div className="flex gap-6 text-sm">
+              <div className="flex items-center justify-around">
                 <div>
-                  <div className="font-bold text-black">24</div>
+                  <div className="font-bold text-black">{Math.floor(userElo / 30)}</div>
                   <div className="text-xs text-gray-600">Wins</div>
                 </div>
                 <div>
-                  <div className="font-bold text-black">18</div>
+                  <div className="font-bold text-black">0</div>
                   <div className="text-xs text-gray-600">Losses</div>
                 </div>
                 <div>
-                  <div className="font-bold text-black">57%</div>
+                  <div className="font-bold text-black">{Math.floor(userElo / 30) > 0 ? "100" : "0"}%</div>
                   <div className="text-xs text-gray-600">Win Rate</div>
                 </div>
               </div>

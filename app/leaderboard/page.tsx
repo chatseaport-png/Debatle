@@ -1,11 +1,40 @@
-import Link from "next/link";
-import { ranks } from "@/lib/rankSystem";
+"use client";
 
-const leaderboardData = [
-  { rank: 1, username: "You", elo: 0, wins: 0, losses: 0, winRate: 0 },
-];
+import Link from "next/link";
+import { ranks, getRankByElo } from "@/lib/rankSystem";
+import { useEffect, useState } from "react";
 
 export default function Leaderboard() {
+  const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    // Load all users from localStorage
+    const storedUsers = localStorage.getItem("debatel_users");
+    const storedUser = localStorage.getItem("debatel_user");
+    
+    if (storedUser) {
+      setCurrentUser(JSON.parse(storedUser));
+    }
+    
+    if (storedUsers) {
+      const users = JSON.parse(storedUsers);
+      // Sort by ELO descending, take top 1000
+      const sortedUsers = users
+        .sort((a: any, b: any) => (b.elo || 0) - (a.elo || 0))
+        .slice(0, 1000)
+        .map((user: any, index: number) => ({
+          rank: index + 1,
+          username: user.username,
+          elo: user.elo || 0,
+          wins: Math.floor((user.elo || 0) / 30),
+          losses: 0,
+          winRate: Math.floor((user.elo || 0) / 30) > 0 ? 100 : 0,
+        }));
+      setLeaderboardData(sortedUsers);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-white">
       {/* Navigation */}
@@ -36,21 +65,26 @@ export default function Leaderboard() {
         {/* Rank Tiers */}
         <div className="mb-8 border border-gray-200 bg-white p-6">
           <h2 className="mb-4 text-2xl font-bold text-black">Rank Tiers</h2>
+          <div className="mb-4 rounded bg-gray-50 p-4 text-sm text-gray-600">
+            Each rank has 3 sub-ranks (1, 2, 3). Each sub-rank requires 100 ELO. Gain 30 ELO per win.
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {ranks.map((rank) => (
               <div
                 key={rank.name}
-                className="flex items-center gap-3 rounded border-2 border-gray-200 p-4 transition hover:border-gray-400"
-                style={{ borderColor: rank.color }}
+                className="rounded border-2 p-4 transition hover:border-gray-400"
+                style={{ borderColor: rank.bgColor, backgroundColor: `${rank.bgColor}15` }}
               >
-                <span className="text-3xl">{rank.icon}</span>
-                <div>
-                  <div className="font-bold" style={{ color: rank.color }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-3xl">{rank.icon}</span>
+                  <div className="font-bold text-lg" style={{ color: rank.bgColor }}>
                     {rank.name}
                   </div>
-                  <div className="text-sm text-gray-600">
-                    {rank.maxElo ? `${rank.minElo}-${rank.maxElo}` : `${rank.minElo}+`} ELO
-                  </div>
+                </div>
+                <div className="text-xs text-gray-600 space-y-1">
+                  <div>{rank.name} 1: {rank.minElo}-{rank.minElo + 99} ELO</div>
+                  <div>{rank.name} 2: {rank.minElo + 100}-{rank.minElo + 199} ELO</div>
+                  <div>{rank.name} 3: {rank.minElo + 200}-{rank.maxElo === Infinity ? '∞' : rank.maxElo} ELO</div>
                 </div>
               </div>
             ))}
@@ -71,39 +105,52 @@ export default function Leaderboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {leaderboardData.map((player, index) => (
-                  <tr
-                    key={player.username}
-                    className={`${
-                      player.username === "You" ? "bg-black text-white" : "hover:bg-gray-50"
-                    }`}
-                  >
-                    <td className="px-6 py-5">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl font-bold">{player.rank}</span>
-                        {index < 3 && (
-                          <span className="text-xs">
-                            {index === 0 ? "★" : index === 1 ? "★" : "★"}
-                          </span>
-                        )}
-                      </div>
+                {leaderboardData.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                      No players ranked yet. Be the first to compete!
                     </td>
-                    <td className="px-6 py-5">
-                      <span className="font-semibold">
-                        {player.username}
-                        {player.username === "You" && (
-                          <span className="ml-2 text-xs">(Your Rank)</span>
-                        )}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5">
-                      <span className="font-bold">{player.elo}</span>
-                    </td>
-                    <td className="px-6 py-5">{player.wins}</td>
-                    <td className="px-6 py-5">{player.losses}</td>
-                    <td className="px-6 py-5">{player.winRate}%</td>
                   </tr>
-                ))}
+                ) : (
+                  leaderboardData.map((player, index) => (
+                    <tr
+                      key={`${player.username}-${index}`}
+                      className={`${
+                        currentUser && player.username === currentUser.username ? "bg-black text-white" : "hover:bg-gray-50"
+                      }`}
+                    >
+                      <td className="px-6 py-5">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl font-bold">{player.rank}</span>
+                          {index < 3 && (
+                            <span className="text-2xl">
+                              {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">
+                            {player.username}
+                            {currentUser && player.username === currentUser.username && (
+                              <span className="ml-2 text-xs">(You)</span>
+                            )}
+                          </span>
+                          <span className="text-sm" style={{ color: getRankByElo(player.elo).bgColor }}>
+                            {getRankByElo(player.elo).icon}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className="font-bold">{player.elo}</span>
+                      </td>
+                      <td className="px-6 py-5">{player.wins}</td>
+                      <td className="px-6 py-5">{player.losses}</td>
+                      <td className="px-6 py-5">{player.winRate}%</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
