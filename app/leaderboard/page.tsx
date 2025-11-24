@@ -57,11 +57,6 @@ export default function Leaderboard() {
       </nav>
 
       <main className="mx-auto max-w-6xl px-4 py-12">
-        <div className="mb-12 border-b border-gray-200 pb-8">
-          <h1 className="text-5xl font-bold text-black">Global Rankings</h1>
-          <p className="mt-3 text-gray-600">Top debaters by ELO rating</p>
-        </div>
-
         {/* Rank Tiers */}
         <div className="mb-8 border border-gray-200 bg-white p-6">
           <h2 className="mb-4 text-2xl font-bold text-black">Rank Tiers</h2>
@@ -89,6 +84,11 @@ export default function Leaderboard() {
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="mb-12 border-b border-gray-200 pb-8">
+          <h1 className="text-5xl font-bold text-black">Global Rankings</h1>
+          <p className="mt-3 text-gray-600">Top 1000 debaters by ELO rating</p>
         </div>
 
         <div className="border border-gray-200 bg-white">

@@ -139,24 +139,40 @@ export default function Lobby() {
       </nav>
 
       <main className="mx-auto max-w-3xl px-4 py-12">
-        {/* Rank Progress - Valorant Style */}
-        {isLoggedIn && selectedType === "ranked" && (
-          <div className="mb-6 border-2 border-black bg-white p-6">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <div className="text-2xl font-bold" style={{ color: getRankByElo(userElo).bgColor }}>
-                  {getRankByElo(userElo).icon} {getRankByElo(userElo).displayName}
-                </div>
-                <div className="text-sm text-gray-600">{userElo} ELO</div>
+        {/* Large Rank Emblem - Valorant Style */}
+        {isLoggedIn && (
+          <div className="mb-8 flex justify-center">
+            <div className="text-center">
+              <div 
+                className="mx-auto mb-4 flex h-40 w-40 items-center justify-center rounded-full border-4 shadow-2xl"
+                style={{ 
+                  borderColor: getRankByElo(userElo).bgColor,
+                  backgroundColor: `${getRankByElo(userElo).bgColor}20`,
+                }}
+              >
+                <span className="text-8xl">{getRankByElo(userElo).icon}</span>
               </div>
-              <div className="text-right">
-                <div className="text-sm font-semibold text-gray-700">
-                  {100 - getRankByElo(userElo).progress} ELO to {getRankByElo(userElo).name} {getRankByElo(userElo).subRank + 1}
-                </div>
+              <div className="text-3xl font-bold" style={{ color: getRankByElo(userElo).bgColor }}>
+                {getRankByElo(userElo).displayName}
+              </div>
+              <div className="text-xl text-gray-600">{userElo} ELO</div>
+            </div>
+          </div>
+        )}
+
+        {/* Rank Progress Bar */}
+        {isLoggedIn && (
+          <div className="mb-6 border-2 border-black bg-white p-6">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-semibold text-gray-700">
+                Progress to {getRankByElo(userElo).name} {getRankByElo(userElo).subRank + 1}
+              </div>
+              <div className="text-sm font-bold" style={{ color: getRankByElo(userElo).bgColor }}>
+                {getRankByElo(userElo).progress}/100 ELO
               </div>
             </div>
             {/* Progress Bar */}
-            <div className="relative h-3 overflow-hidden rounded-full bg-gray-200">
+            <div className="relative h-4 overflow-hidden rounded-full bg-gray-200">
               <div
                 className="h-full rounded-full transition-all duration-500"
                 style={{
@@ -171,24 +187,22 @@ export default function Lobby() {
         {/* Player Stats */}
         {isLoggedIn && (
           <div className="mb-6 border border-gray-300 bg-white p-8">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+              <div className="text-center">
                 <div className="text-3xl font-bold text-black">{userElo}</div>
                 <div className="text-xs uppercase tracking-wide text-gray-600">ELO Rating</div>
               </div>
-              <div className="flex items-center justify-around">
-                <div>
-                  <div className="font-bold text-black">{Math.floor(userElo / 30)}</div>
-                  <div className="text-xs text-gray-600">Wins</div>
-                </div>
-                <div>
-                  <div className="font-bold text-black">0</div>
-                  <div className="text-xs text-gray-600">Losses</div>
-                </div>
-                <div>
-                  <div className="font-bold text-black">{Math.floor(userElo / 30) > 0 ? "100" : "0"}%</div>
-                  <div className="text-xs text-gray-600">Win Rate</div>
-                </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-green-600">{Math.floor(userElo / 30)}</div>
+                <div className="text-xs uppercase tracking-wide text-gray-600">Wins</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-red-600">0</div>
+                <div className="text-xs uppercase tracking-wide text-gray-600">Losses</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-blue-600">{Math.floor(userElo / 30) > 0 ? "100" : "0"}%</div>
+                <div className="text-xs uppercase tracking-wide text-gray-600">Win Rate</div>
               </div>
             </div>
           </div>
