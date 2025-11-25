@@ -26,44 +26,68 @@ export default function Lobby() {
 
   // Load username from localStorage if logged in and migrate old users
   useEffect(() => {
-    const storedUser = localStorage.getItem("debatel_user");
-    if (storedUser) {
-      const user = JSON.parse(storedUser);
-      
-      // Check if user has old ELO (1000 or 1500) and reset to 0
-      const needsMigration = user.elo === 1000 || user.elo === 1500 || user.elo > 2000;
-      const migratedElo = needsMigration ? 0 : (user.elo !== undefined ? user.elo : 0);
-      
-      // Update session if migration happened
-      if (needsMigration) {
-        const updatedUser = {
-          ...user,
-          elo: migratedElo,
-          profileIcon: user.profileIcon || "👤",
-          profileBanner: user.profileBanner || "#3b82f6"
-        };
-        localStorage.setItem("debatel_user", JSON.stringify(updatedUser));
+    const loadUserData = () => {
+      const storedUser = localStorage.getItem("debatel_user");
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
         
-        // Also update in users array
-        const storedUsers = localStorage.getItem("debatel_users");
-        if (storedUsers) {
-          const users = JSON.parse(storedUsers);
-          const userIndex = users.findIndex((u: any) => u.username === user.username);
-          if (userIndex !== -1) {
-            users[userIndex].elo = migratedElo;
-            localStorage.setItem("debatel_users", JSON.stringify(users));
+        // Check if user has old ELO (1000 or 1500) and reset to 0
+        const needsMigration = user.elo === 1000 || user.elo === 1500 || user.elo > 2000;
+        const migratedElo = needsMigration ? 0 : (user.elo !== undefined ? user.elo : 0);
+        
+        // Update session if migration happened
+        if (needsMigration) {
+          const updatedUser = {
+            ...user,
+            elo: migratedElo,
+            profileIcon: user.profileIcon || "👤",
+            profileBanner: user.profileBanner || "#3b82f6"
+          };
+          localStorage.setItem("debatel_user", JSON.stringify(updatedUser));
+          
+          // Also update in users array
+          const storedUsers = localStorage.getItem("debatel_users");
+          if (storedUsers) {
+            const users = JSON.parse(storedUsers);
+            const userIndex = users.findIndex((u: any) => u.username === user.username);
+            if (userIndex !== -1) {
+              users[userIndex].elo = migratedElo;
+              localStorage.setItem("debatel_users", JSON.stringify(users));
+            }
           }
         }
+        
+        setUsername(user.username);
+        setUserElo(migratedElo);
+        setProfileIcon(user.profileIcon || "👤");
+        setProfileBanner(user.profileBanner || "#3b82f6");
+        setIsLoggedIn(true);
+      } else {
+        setIsLoggedIn(false);
       }
-      
-      setUsername(user.username);
-      setUserElo(migratedElo);
-      setProfileIcon(user.profileIcon || "👤");
-      setProfileBanner(user.profileBanner || "#3b82f6");
-      setIsLoggedIn(true);
-    } else {
-      setIsLoggedIn(false);
-    }
+    };
+
+    loadUserData();
+
+    // Refresh user data when window regains focus (returning from debate)
+    const handleFocus = () => {
+      loadUserData();
+    };
+
+    // Listen for storage changes (from other tabs or manual updates)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "debatel_user") {
+        loadUserData();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("storage", handleStorageChange);
+    };
   }, []);
 
   useEffect(() => {

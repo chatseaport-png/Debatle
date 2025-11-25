@@ -90,7 +90,40 @@ function DebateRoom() {
     });
 
     socket.on("opponent-disconnected", () => {
-      alert("Opponent disconnected. You win by default!");
+      // Award victory and update ELO for ranked matches
+      if (gameType === "ranked") {
+        const storedUser = localStorage.getItem("debatel_user");
+        if (storedUser) {
+          const user = JSON.parse(storedUser);
+          const eloChange = 30; // Standard win ELO
+          const newElo = Math.max(0, (user.elo || 0) + eloChange);
+          
+          // Update session
+          user.elo = newElo;
+          localStorage.setItem("debatel_user", JSON.stringify(user));
+          
+          // Update in users list
+          const storedUsers = localStorage.getItem("debatel_users");
+          if (storedUsers) {
+            const users = JSON.parse(storedUsers);
+            const userIndex = users.findIndex((u: any) => u.username === user.username);
+            if (userIndex !== -1) {
+              users[userIndex].elo = newElo;
+              localStorage.setItem("debatel_users", JSON.stringify(users));
+            }
+          }
+          
+          // Store ELO change for display on profile page
+          localStorage.setItem("debatel_recent_elo_change", eloChange.toString());
+          
+          alert(`Opponent disconnected. You win by default! (+${eloChange} ELO)`);
+        } else {
+          alert("Opponent disconnected. You win by default!");
+        }
+      } else {
+        alert("Opponent disconnected. You win by default!");
+      }
+      
       router.push("/lobby");
     });
 
