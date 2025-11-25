@@ -84,7 +84,7 @@ export default function Lobby() {
       socket.off("match-found");
       socket.off("queue-status");
     };
-  }, [socket, router, selectedMode]);
+  }, [socket, router, selectedMode, selectedType, userElo, profileIcon, profileBanner]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;

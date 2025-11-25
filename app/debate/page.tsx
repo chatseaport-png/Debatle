@@ -63,16 +63,24 @@ function DebateRoom() {
   useEffect(() => {
     if (!socket || !isMultiplayer || !matchId) return;
 
-    socket.on("opponent-message", ({ text, time }) => {
+    socket.on("opponent-message", ({ text, time, senderId }) => {
+      // Ignore echoes of our own message
+      if (socket.id === senderId) return;
+
       const opponentMsg = {
         sender: "Opponent",
         text,
         time,
         isYourTurn: false
       };
+
       setMessages(prev => [...prev, opponentMsg]);
-      const opponentPoints = Math.floor(Math.random() * 25) + 20;
-      setOpponentScore(prev => prev + opponentPoints);
+
+      // Only award practice-mode placeholder points
+      if (!isMultiplayer) {
+        const opponentPoints = Math.floor(Math.random() * 25) + 20;
+        setOpponentScore(prev => prev + opponentPoints);
+      }
     });
 
     socket.on("turn-change", ({ currentTurn }) => {
@@ -317,14 +325,16 @@ function DebateRoom() {
 
     setMessages(prev => [...prev, newMessage]);
     setHasSubmitted(true);
-    
-    // Calculate score based on response time and length
-    const timeBonus = responseTime < timePerTurn / 2 ? 10 : 5;
-    const lengthBonus = currentMessage.length > 100 ? 10 : 5;
-    const baseScore = Math.floor(Math.random() * 15) + 15;
-    const totalScore = baseScore + timeBonus + lengthBonus;
-    
-    setYourScore(prev => prev + totalScore);
+
+    if (!isMultiplayer) {
+      // Calculate score based on response time and length (practice mode only)
+      const timeBonus = responseTime < timePerTurn / 2 ? 10 : 5;
+      const lengthBonus = currentMessage.length > 100 ? 10 : 5;
+      const baseScore = Math.floor(Math.random() * 15) + 15;
+      const totalScore = baseScore + timeBonus + lengthBonus;
+
+      setYourScore(prev => prev + totalScore);
+    }
     
     // Send to opponent if multiplayer
     if (isMultiplayer && socket && matchId) {
@@ -333,6 +343,8 @@ function DebateRoom() {
         message: currentMessage,
         time: responseTime
       });
+      setCurrentMessage("");
+      return;
     }
     
     setCurrentMessage("");

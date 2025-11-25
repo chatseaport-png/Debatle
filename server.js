@@ -146,7 +146,8 @@ app.prepare().then(() => {
       io.to(matchId).emit('opponent-message', {
         text: message,
         time,
-        round: match.round
+        round: match.round,
+        senderId: socket.id
       });
       
       // Notify turn change
