@@ -18,11 +18,11 @@ function DebateRoom() {
   const gameType = searchParams.get("type") || "practice";
   const opponentUsername = searchParams.get("opponentUsername") || "Opponent";
   const opponentElo = parseInt(searchParams.get("opponentElo") || "0");
-  const opponentIcon = searchParams.get("opponentIcon") || "👤";
-  const opponentBanner = searchParams.get("opponentBanner") || "#3b82f6";
+  const opponentIcon = decodeURIComponent(searchParams.get("opponentIcon") || "👤");
+  const opponentBanner = decodeURIComponent(searchParams.get("opponentBanner") || "#3b82f6");
   const userElo = parseInt(searchParams.get("userElo") || "0");
-  const userIcon = searchParams.get("userIcon") || "👤";
-  const userBanner = searchParams.get("userBanner") || "#3b82f6";
+  const userIcon = decodeURIComponent(searchParams.get("userIcon") || "👤");
+  const userBanner = decodeURIComponent(searchParams.get("userBanner") || "#3b82f6");
   const topicIndex = searchParams.get("topicIndex");
   const timePerTurn = mode === "speed" ? 30 : 60;
   const totalRounds = 5;
@@ -376,9 +376,11 @@ function DebateRoom() {
         
         // Update ELO based on performance (dynamic system)
         if (gameType === "ranked") {
+          console.log("Ranked game detected, updating ELO...");
           const storedUser = localStorage.getItem("debatel_user");
           if (storedUser) {
             const user = JSON.parse(storedUser);
+            console.log("Current user ELO:", user.elo);
             
             // Calculate ELO change based on score difference
             const scoreDiff = judgement.playerScore - judgement.opponentScore;
@@ -405,10 +407,12 @@ function DebateRoom() {
             }
             
             const newElo = Math.max(0, (user.elo || 0) + eloChange); // Can't go below 0
+            console.log("ELO change:", eloChange, "New ELO:", newElo);
             
             // Update session
             user.elo = newElo;
             localStorage.setItem("debatel_user", JSON.stringify(user));
+            console.log("Updated localStorage debatel_user with new ELO:", newElo);
             
             // Update in users list
             const storedUsers = localStorage.getItem("debatel_users");

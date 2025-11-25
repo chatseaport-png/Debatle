@@ -187,18 +187,6 @@ export default function Profile() {
             Back to Lobby
           </Link>
         </div>
-
-        {/* Reset ELO Section */}
-        <div className="mt-8 border-2 border-red-500 bg-red-50 p-6">
-          <h3 className="mb-2 text-lg font-bold text-red-700">Danger Zone</h3>
-          <p className="mb-4 text-sm text-gray-700">Reset your competitive ranking to start fresh.</p>
-          <button
-            onClick={handleResetElo}
-            className="rounded-sm bg-red-600 px-6 py-2 font-semibold text-white transition hover:bg-red-700"
-          >
-            Reset ELO to 0
-          </button>
-        </div>
       </main>
     </div>
   );
