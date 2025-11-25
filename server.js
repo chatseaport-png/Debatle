@@ -53,9 +53,13 @@ app.prepare().then(() => {
       
       const queue = matchmakingQueue[type][mode];
       
-      // Check if there's someone waiting in the same type/mode
-      if (queue.length > 0) {
-        const opponent = queue.shift();
+      // Check if there's someone waiting in the same type/mode with OPPOSITE side
+      const opposingSide = side === 'for' ? 'against' : 'for';
+      const opponentIndex = queue.findIndex(p => p.side === opposingSide);
+      
+      if (opponentIndex !== -1) {
+        // Found an opponent with opposite side
+        const opponent = queue.splice(opponentIndex, 1)[0];
         const matchId = `match-${Date.now()}`;
         
         // Generate a random topic index that both players will use
@@ -100,9 +104,9 @@ app.prepare().then(() => {
         socket.join(matchId);
         io.sockets.sockets.get(opponent.socketId)?.join(matchId);
         
-        console.log(`${type} match created: ${matchId}`);
+        console.log(`${type} match created: ${matchId} - ${opponent.username} (${opponent.side}) vs ${username} (${side})`);
       } else {
-        // Add to queue
+        // Add to queue - no opponent with opposite side found yet
         queue.push({ socketId: socket.id, username, side, type, elo, icon, banner });
         socket.emit('queue-status', { position: queue.length });
       }
