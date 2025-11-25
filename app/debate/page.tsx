@@ -437,7 +437,8 @@ function DebateRoom() {
               }
             }
             
-            // Store ELO change for display
+            // Store ELO change for display on profile page
+            localStorage.setItem("debatel_recent_elo_change", eloChange.toString());
             (window as any).lastEloChange = eloChange;
           }
         }

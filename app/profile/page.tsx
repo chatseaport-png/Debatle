@@ -27,6 +27,8 @@ export default function Profile() {
   const [selectedBanner, setSelectedBanner] = useState("#3b82f6");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [eloChange, setEloChange] = useState<number | null>(null);
+  const [showEloChange, setShowEloChange] = useState(false);
 
   useEffect(() => {
     const storedUser = localStorage.getItem("debatel_user");
@@ -38,6 +40,38 @@ export default function Profile() {
     setUser(userData);
     setSelectedIcon(userData.profileIcon || "👤");
     setSelectedBanner(userData.profileBanner || "#3b82f6");
+
+    // Check for recent ELO change
+    const recentEloChange = localStorage.getItem("debatel_recent_elo_change");
+    if (recentEloChange) {
+      const change = parseInt(recentEloChange);
+      setEloChange(change);
+      setShowEloChange(true);
+      // Clear after showing
+      setTimeout(() => {
+        setShowEloChange(false);
+        localStorage.removeItem("debatel_recent_elo_change");
+      }, 5000);
+    }
+
+    // Listen for storage changes (ELO updates from other tabs/windows)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "debatel_user" && e.newValue) {
+        const updatedUser = JSON.parse(e.newValue);
+        setUser(updatedUser);
+      }
+      if (e.key === "debatel_recent_elo_change" && e.newValue) {
+        const change = parseInt(e.newValue);
+        setEloChange(change);
+        setShowEloChange(true);
+        setTimeout(() => {
+          setShowEloChange(false);
+        }, 5000);
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
   }, [router]);
 
   const handleSave = () => {
@@ -104,6 +138,19 @@ export default function Profile() {
       <main className="mx-auto max-w-4xl px-4 py-12">
         <h1 className="mb-8 text-4xl font-bold text-black">Profile Customization</h1>
 
+        {/* ELO Change Notification */}
+        {showEloChange && eloChange !== null && (
+          <div className={`mb-4 animate-pulse rounded-lg border-2 p-4 text-center text-xl font-bold ${
+            eloChange > 0 
+              ? 'border-green-500 bg-green-50 text-green-700' 
+              : eloChange < 0 
+              ? 'border-red-500 bg-red-50 text-red-700'
+              : 'border-gray-500 bg-gray-50 text-gray-700'
+          }`}>
+            {eloChange > 0 ? '+' : ''}{eloChange} ELO {eloChange > 0 ? '🎉' : eloChange < 0 ? '😔' : ''}
+          </div>
+        )}
+
         {/* Preview Card */}
         <div className="mb-8 border-2 border-black bg-white p-6">
           <h2 className="mb-4 text-xl font-bold text-black">Preview</h2>
@@ -117,10 +164,23 @@ export default function Profile() {
             <div className="bg-white p-6">
               <div className="flex items-center gap-4">
                 <div className="text-6xl">{selectedIcon}</div>
-                <div>
+                <div className="flex-1">
                   <div className="text-2xl font-bold text-black">{user.username}</div>
                   <div className={`text-sm font-semibold ${rank.color}`}>
                     {rank.icon} {rank.displayName} • {user.elo !== undefined ? user.elo : 0} ELO
+                  </div>
+                  {/* Progress Bar */}
+                  <div className="mt-3">
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <span className="text-gray-600">Progress to Next Rank</span>
+                      <span className="font-semibold text-gray-900">{rank.progress}%</span>
+                    </div>
+                    <div className="h-3 w-full overflow-hidden rounded-full bg-gray-200">
+                      <div 
+                        className={`h-full transition-all duration-1000 ease-out ${rank.color.replace('text-', 'bg-')}`}
+                        style={{ width: `${rank.progress}%` }}
+                      ></div>
+                    </div>
                   </div>
                 </div>
               </div>
