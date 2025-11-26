@@ -19,7 +19,7 @@ export default function Leaderboard() {
     
     if (storedUsers) {
       const users = JSON.parse(storedUsers);
-      // Sort by ELO descending, show ALL users (not just top 1000)
+      // Sort by ELO descending, show ALL users
       const sortedUsers = users
         .sort((a: any, b: any) => (b.elo || 0) - (a.elo || 0))
         .map((user: any, index: number) => ({
@@ -57,27 +57,28 @@ export default function Leaderboard() {
 
       <main className="mx-auto max-w-6xl px-4 py-12">
         {/* Rank Tiers */}
-        <div className="mb-8 border-2 border-black bg-white p-8">
-          <h2 className="mb-6 text-3xl font-bold text-black">Rank Tiers</h2>
-          <div className="mb-6 rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm text-gray-700">
-            <strong>How it works:</strong> Each rank has 3 sub-ranks (1, 2, 3). Each sub-rank requires 100 ELO. Gain 30-45 ELO per win based on performance.
+        <div className="mb-10 border-2 border-black bg-gradient-to-b from-white to-gray-50 p-8 shadow-lg">
+          <h2 className="mb-6 text-center text-3xl font-bold text-black">Rank Tiers</h2>
+          <div className="mb-6 mx-auto max-w-2xl rounded-lg bg-white border-2 border-gray-300 p-4 text-center text-sm text-gray-700 shadow-sm">
+            <strong>Ranking System:</strong> Each rank has 3 sub-ranks (1, 2, 3). Each sub-rank requires 100 ELO. 
+            Win: +30-45 ELO • Loss: -30 ELO
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
             {ranks.map((rank) => (
               <div
                 key={rank.name}
-                className="flex flex-col items-center justify-center rounded-lg border-2 p-4 transition-all hover:scale-105 hover:shadow-lg"
+                className="group relative flex flex-col items-center justify-center rounded-xl border-2 bg-white p-5 transition-all duration-300 hover:scale-110 hover:shadow-2xl hover:z-10"
                 style={{ 
-                  borderColor: rank.bgColor, 
-                  backgroundColor: 'white',
-                  boxShadow: `0 0 0 0 ${rank.bgColor}40`
+                  borderColor: rank.bgColor,
                 }}
               >
-                <span className="text-4xl mb-2">{rank.icon}</span>
-                <div className="font-bold text-sm text-center mb-1" style={{ color: rank.bgColor }}>
+                <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-10 transition-opacity" 
+                     style={{ backgroundColor: rank.bgColor }}></div>
+                <span className="text-5xl mb-3 drop-shadow-md">{rank.icon}</span>
+                <div className="font-bold text-base text-center mb-1 z-10" style={{ color: rank.bgColor }}>
                   {rank.name}
                 </div>
-                <div className="text-xs text-gray-500 text-center">
+                <div className="text-xs text-gray-600 text-center font-medium z-10">
                   {rank.minElo}-{rank.maxElo === Infinity ? '∞' : rank.maxElo}
                 </div>
               </div>

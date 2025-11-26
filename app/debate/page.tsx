@@ -439,11 +439,8 @@ function DebateRoom() {
               else if (scoreDiff >= 10) eloChange += 5; // Solid win (35 total)
               // Close win (scoreDiff < 10) gets base 30
             } else if (judgement.winner === "opponent") {
-              // Loss: Penalty based on how badly you lost
-              if (scoreDiff <= -30) eloChange = -30; // Dominated (-30)
-              else if (scoreDiff <= -20) eloChange = -25; // Clear loss (-25)
-              else if (scoreDiff <= -10) eloChange = -20; // Loss (-20)
-              else eloChange = -15; // Close loss (-15)
+              // Loss: Flat penalty
+              eloChange = -30; // All losses are -30 ELO
             } else {
               // Tie: Small gain for high-scoring ties, small loss for low-scoring ties
               if (judgement.playerScore >= 70) eloChange = 5;
