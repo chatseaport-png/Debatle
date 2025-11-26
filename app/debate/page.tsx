@@ -63,8 +63,13 @@ function DebateRoom() {
   useEffect(() => {
     if (!socket || !isMultiplayer || !matchId) return;
 
-    socket.on("opponent-message", ({ text, time, senderId }) => {
-      // Ignore echoes of our own message
+    socket.on("opponent-message", ({ text, time, senderId, round: incomingRound }) => {
+      if (typeof incomingRound === "number") {
+        setRound(incomingRound);
+        setMessagesThisRound(incomingRound % 2 === 0 ? 0 : 1);
+      }
+
+      // Ignore echoes of our own message after updating round data
       if (socket.id === senderId) return;
 
       const opponentMsg = {
@@ -87,6 +92,7 @@ function DebateRoom() {
       setIsYourTurn(socket.id === currentTurn);
       setHasSubmitted(false);
       setTimeLeft(timePerTurn);
+      setMessagesThisRound(0);
     });
 
     socket.on("opponent-disconnected", () => {
@@ -104,6 +110,7 @@ function DebateRoom() {
           user.rankedWins = updatedWins;
           user.rankedLosses = user.rankedLosses !== undefined ? user.rankedLosses : 0;
           localStorage.setItem("debatel_user", JSON.stringify(user));
+          window.dispatchEvent(new Event("debatelUsersUpdated"));
           
           // Update in users list
           const storedUsers = localStorage.getItem("debatel_users");
@@ -115,11 +122,13 @@ function DebateRoom() {
               users[userIndex].rankedWins = updatedWins;
               users[userIndex].rankedLosses = users[userIndex].rankedLosses !== undefined ? users[userIndex].rankedLosses : 0;
               localStorage.setItem("debatel_users", JSON.stringify(users));
+              window.dispatchEvent(new Event("debatelUsersUpdated"));
             }
           }
           
           // Store ELO change for display on profile page
           localStorage.setItem("debatel_recent_elo_change", eloChange.toString());
+          window.dispatchEvent(new Event("debatelUsersUpdated"));
           
           alert(`Opponent disconnected. You win by default! (+${eloChange} ELO)`);
         } else {
@@ -466,6 +475,7 @@ function DebateRoom() {
             user.rankedLosses = updatedLosses;
             localStorage.setItem("debatel_user", JSON.stringify(user));
             console.log("Updated localStorage debatel_user with new ELO:", newElo);
+            window.dispatchEvent(new Event("debatelUsersUpdated"));
             
             // Update in users list
             const storedUsers = localStorage.getItem("debatel_users");
@@ -477,6 +487,7 @@ function DebateRoom() {
                 users[userIndex].rankedWins = updatedWins;
                 users[userIndex].rankedLosses = updatedLosses;
                 localStorage.setItem("debatel_users", JSON.stringify(users));
+                window.dispatchEvent(new Event("debatelUsersUpdated"));
               }
             }
             
@@ -533,7 +544,45 @@ function DebateRoom() {
   };
 
   const confirmExit = () => {
-    // User loses ranked points for leaving mid-match
+    setShowExitConfirm(false);
+
+    if (!debateEnded && gameType === "ranked") {
+      const storedUser = localStorage.getItem("debatel_user");
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        const eloLoss = 30;
+        const newElo = Math.max(0, (user.elo || 0) - eloLoss);
+        const updatedLosses = (user.rankedLosses !== undefined ? user.rankedLosses : 0) + 1;
+
+        user.elo = newElo;
+        user.rankedLosses = updatedLosses;
+        user.rankedWins = user.rankedWins !== undefined ? user.rankedWins : 0;
+        localStorage.setItem("debatel_user", JSON.stringify(user));
+        localStorage.setItem("debatel_recent_elo_change", `-${eloLoss}`);
+
+        const storedUsers = localStorage.getItem("debatel_users");
+        if (storedUsers) {
+          const users = JSON.parse(storedUsers);
+          const userIndex = users.findIndex((u: any) => u.username === user.username);
+          if (userIndex !== -1) {
+            users[userIndex] = {
+              ...users[userIndex],
+              elo: newElo,
+              rankedWins: user.rankedWins,
+              rankedLosses: updatedLosses
+            };
+            localStorage.setItem("debatel_users", JSON.stringify(users));
+          }
+        }
+
+        window.dispatchEvent(new Event("debatelUsersUpdated"));
+      }
+    }
+
+    if (isMultiplayer && socket && matchId && !debateEnded) {
+      socket.emit("end-debate", { matchId });
+    }
+
     router.push("/lobby?penalty=true");
   };
 
