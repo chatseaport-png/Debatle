@@ -186,13 +186,24 @@ app.prepare().then(() => {
     });
 
     // End debate
-    socket.on('end-debate', ({ matchId }) => {
+    socket.on('end-debate', ({ matchId, forfeit = false } = {}) => {
       const match = activeMatches.get(matchId);
-      if (match) {
+      if (!match) return;
+
+      const opponentId = match.player1.id === socket.id ? match.player2.id : match.player1.id;
+      const departureContext = {
+        forfeit,
+        beforeStart: (match.messagesPlayed || 0) === 0
+      };
+
+      if (forfeit && opponentId) {
+        io.to(opponentId).emit('opponent-disconnected', departureContext);
+      } else {
         io.to(matchId).emit('debate-ended');
-        activeMatches.delete(matchId);
-        console.log(`Match ended: ${matchId}`);
       }
+
+      activeMatches.delete(matchId);
+      console.log(`Match ended: ${matchId}${forfeit ? ' (forfeit)' : ''}`);
     });
 
     // Disconnect
@@ -211,7 +222,10 @@ app.prepare().then(() => {
       activeMatches.forEach((match, matchId) => {
         if (match.player1.id === socket.id || match.player2.id === socket.id) {
           const opponentId = match.player1.id === socket.id ? match.player2.id : match.player1.id;
-          io.to(opponentId).emit('opponent-disconnected');
+          io.to(opponentId).emit('opponent-disconnected', {
+            forfeit: true,
+            beforeStart: (match.messagesPlayed || 0) === 0
+          });
           activeMatches.delete(matchId);
         }
       });

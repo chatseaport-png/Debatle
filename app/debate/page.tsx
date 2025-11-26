@@ -47,6 +47,29 @@ const parseStoredUsers = (rawValue: string | null): StoredUser[] => {
 
 type ExtendedWindow = Window & { lastEloChange?: number };
 
+const decideWinner = (
+  judgePlayerScore: number,
+  judgeOpponentScore: number,
+  fallbackPlayerScore: number,
+  fallbackOpponentScore: number,
+  playerMessageCount: number,
+  opponentMessageCount: number
+): "player" | "opponent" => {
+  if (judgePlayerScore !== judgeOpponentScore) {
+    return judgePlayerScore > judgeOpponentScore ? "player" : "opponent";
+  }
+
+  if (fallbackPlayerScore !== fallbackOpponentScore) {
+    return fallbackPlayerScore > fallbackOpponentScore ? "player" : "opponent";
+  }
+
+  if (playerMessageCount !== opponentMessageCount) {
+    return playerMessageCount > opponentMessageCount ? "player" : "opponent";
+  }
+
+  return "player";
+};
+
 function DebateRoom() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -93,6 +116,73 @@ function DebateRoom() {
   const [pendingDebateEnd, setPendingDebateEnd] = useState(false);
   const READING_DURATION = 0;
   const opponentResponseTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  const persistUserToLeaderboard = (updatedUser: StoredUser) => {
+    const users = parseStoredUsers(localStorage.getItem("debatel_users"));
+
+    if (users.length === 0) {
+      localStorage.setItem("debatel_users", JSON.stringify([updatedUser]));
+      return;
+    }
+
+    const userIndex = users.findIndex((u) => u.username === updatedUser.username);
+    if (userIndex === -1) {
+      users.push(updatedUser);
+    } else {
+      users[userIndex] = {
+        ...users[userIndex],
+        elo: updatedUser.elo,
+        rankedWins: updatedUser.rankedWins ?? 0,
+        rankedLosses: updatedUser.rankedLosses ?? 0,
+        profileIcon: updatedUser.profileIcon,
+        profileBanner: updatedUser.profileBanner
+      };
+    }
+
+    localStorage.setItem("debatel_users", JSON.stringify(users));
+  };
+
+  const awardRankedWin = (eloBonus = 30) => {
+    const storedUser = parseStoredUser(localStorage.getItem("debatel_user"));
+    if (!storedUser) return null;
+
+    const updatedUser: StoredUser = {
+      ...storedUser,
+      elo: Math.max(0, (storedUser.elo ?? 0) + eloBonus),
+      rankedWins: (storedUser.rankedWins ?? 0) + 1,
+      rankedLosses: storedUser.rankedLosses ?? 0
+    };
+
+    localStorage.setItem("debatel_user", JSON.stringify(updatedUser));
+    localStorage.setItem("debatel_recent_elo_change", eloBonus.toString());
+    (window as ExtendedWindow).lastEloChange = eloBonus;
+
+    persistUserToLeaderboard(updatedUser);
+    window.dispatchEvent(new Event("debatelUsersUpdated"));
+
+    return { updatedUser, eloChange: eloBonus };
+  };
+
+  const applyRankedLossPenalty = (penalty = 30) => {
+    const storedUser = parseStoredUser(localStorage.getItem("debatel_user"));
+    if (!storedUser) return null;
+
+    const updatedUser: StoredUser = {
+      ...storedUser,
+      elo: Math.max(0, (storedUser.elo ?? 0) - penalty),
+      rankedWins: storedUser.rankedWins ?? 0,
+      rankedLosses: (storedUser.rankedLosses ?? 0) + 1
+    };
+
+    localStorage.setItem("debatel_user", JSON.stringify(updatedUser));
+    localStorage.setItem("debatel_recent_elo_change", `-${penalty}`);
+    (window as ExtendedWindow).lastEloChange = -penalty;
+
+    persistUserToLeaderboard(updatedUser);
+    window.dispatchEvent(new Event("debatelUsersUpdated"));
+
+    return { updatedUser, eloChange: -penalty };
+  };
 
   // Multiplayer socket listeners
   useEffect(() => {
@@ -143,51 +233,48 @@ function DebateRoom() {
       }
     });
 
-    socket.on("opponent-disconnected", () => {
-      // Award victory and update ELO for ranked matches
-      if (gameType === "ranked") {
-        const storedUser = parseStoredUser(localStorage.getItem("debatel_user"));
-        if (storedUser) {
-          const user: StoredUser = { ...storedUser };
-          const eloChange = 30; // Standard win ELO
-          const newElo = Math.max(0, (user.elo ?? 0) + eloChange);
-          const updatedWins = (user.rankedWins ?? 0) + 1;
-          
-          // Update session
-          user.elo = newElo;
-          user.rankedWins = updatedWins;
-          user.rankedLosses = user.rankedLosses ?? 0;
-          localStorage.setItem("debatel_user", JSON.stringify(user));
-          window.dispatchEvent(new Event("debatelUsersUpdated"));
-          
-          // Update in users list
-          const users = parseStoredUsers(localStorage.getItem("debatel_users"));
-          if (users.length > 0) {
-            const userIndex = users.findIndex((u) => u.username === user.username);
-            if (userIndex !== -1) {
-              users[userIndex] = {
-                ...users[userIndex],
-                elo: newElo,
-                rankedWins: updatedWins,
-                rankedLosses: users[userIndex].rankedLosses ?? 0
-              };
-              localStorage.setItem("debatel_users", JSON.stringify(users));
-              window.dispatchEvent(new Event("debatelUsersUpdated"));
-            }
-          }
-          
-          // Store ELO change for display on profile page
-          localStorage.setItem("debatel_recent_elo_change", eloChange.toString());
-          window.dispatchEvent(new Event("debatelUsersUpdated"));
-          
-          alert(`Opponent disconnected. You win by default! (+${eloChange} ELO)`);
-        } else {
-          alert("Opponent disconnected. You win by default!");
-        }
-      } else {
-        alert("Opponent disconnected. You win by default!");
+    socket.on("opponent-disconnected", (details: { forfeit?: boolean; beforeStart?: boolean } = {}) => {
+      const departureContext = details.beforeStart ? "before the debate began" : "mid-match";
+      const isRanked = gameType === "ranked";
+  const winResult = isRanked ? awardRankedWin() : null;
+  const eloChange = winResult?.eloChange ?? 0;
+
+      setDebateEnded(true);
+      setIsJudging(false);
+      setPendingDebateEnd(false);
+      setIsReadingBreak(false);
+      setNextTurn(null);
+      setMessagesThisRound(0);
+      setHasSubmitted(true);
+      setIsYourTurn(false);
+      setTimeLeft(0);
+      setAiJudgement(null);
+
+      const resultTextLines = [
+        `Opponent forfeited ${departureContext}.`,
+        "You win!"
+      ];
+      if (isRanked && winResult) {
+        resultTextLines.push(`+${eloChange} ELO awarded.`);
       }
-      
+
+      setMessages(prev => [
+        ...prev,
+        {
+          sender: "Moderator",
+          text: resultTextLines.join("\n\n"),
+          time: 0,
+          isYourTurn: false
+        }
+      ]);
+
+      if (isRanked) {
+        const changeText = winResult ? ` (+${eloChange} ELO)` : "";
+        alert(`Opponent forfeited ${departureContext}. You win!${changeText}`);
+      } else {
+        alert(`Opponent forfeited ${departureContext}. You win!`);
+      }
+
       router.push("/lobby");
     });
 
@@ -461,10 +548,13 @@ function DebateRoom() {
       socket.emit("end-debate", { matchId });
     }
 
+    const playerArguments = messages.filter(m => m.sender === "You");
+    const opponentArguments = messages.filter(m => m.sender === "Opponent");
+    const playerMessageCount = playerArguments.length;
+    const opponentMessageCount = opponentArguments.length;
+
     // Get AI judgement
     try {
-      const playerArguments = messages.filter(m => m.sender === "You");
-      const opponentArguments = messages.filter(m => m.sender === "Opponent");
 
       const response = await fetch("/api/judge", {
         method: "POST",
@@ -479,7 +569,27 @@ function DebateRoom() {
       });
 
       if (response.ok) {
-        const judgement = (await response.json()) as AiJudgement;
+        let judgement = (await response.json()) as AiJudgement;
+        const resolvedWinner = judgement.winner === "tie"
+          ? decideWinner(
+              judgement.playerScore,
+              judgement.opponentScore,
+              yourScore,
+              opponentScore,
+              playerMessageCount,
+              opponentMessageCount
+            )
+          : judgement.winner;
+
+        if (judgement.winner === "tie") {
+          const reasoningNote = judgement.reasoning?.trim() || "Scores were level.";
+          judgement = {
+            ...judgement,
+            winner: resolvedWinner,
+            reasoning: `${reasoningNote} Tie breaker awarded the match to ${resolvedWinner === "player" ? "the player" : "the opponent"}.`
+          };
+        }
+
         setAiJudgement(judgement);
         setYourScore(judgement.playerScore);
         setOpponentScore(judgement.opponentScore);
@@ -503,14 +613,9 @@ function DebateRoom() {
               else if (scoreDiff >= 20) eloChange += 10; // Strong win (40 total)
               else if (scoreDiff >= 10) eloChange += 5; // Solid win (35 total)
               // Close win (scoreDiff < 10) gets base 30
-            } else if (judgement.winner === "opponent") {
+            } else {
               // Loss: Flat penalty
               eloChange = -30; // All losses are -30 ELO
-            } else {
-              // Tie: Small gain for high-scoring ties, small loss for low-scoring ties
-              if (judgement.playerScore >= 70) eloChange = 5;
-              else if (judgement.playerScore >= 60) eloChange = 0;
-              else eloChange = -5;
             }
             
             const newElo = Math.max(0, (user.elo ?? 0) + eloChange); // Can't go below 0
@@ -558,17 +663,26 @@ function DebateRoom() {
         
         const resultMsg = {
           sender: "AI Judge",
-          text: `${judgement.winner === "player" ? "You win!" : judgement.winner === "opponent" ? "Opponent wins!" : "It's a tie!"}\n\nFinal Scores: You: ${judgement.playerScore} | Opponent: ${judgement.opponentScore}\n\nReasoning: ${judgement.reasoning}${eloText}`,
+          text: `${judgement.winner === "player" ? "You win!" : "Opponent wins!"}\n\nFinal Scores: You: ${judgement.playerScore} | Opponent: ${judgement.opponentScore}\n\nReasoning: ${judgement.reasoning}${eloText}`,
           time: 0,
           isYourTurn: false
         };
         setMessages(prev => [...prev, resultMsg]);
       } else {
         // Fallback to simple scoring if API fails
-        const winner = yourScore > opponentScore ? "You win!" : yourScore < opponentScore ? "Opponent wins!" : "Draw!";
+        const resolution = decideWinner(
+          yourScore,
+          opponentScore,
+          yourScore,
+          opponentScore,
+          playerMessageCount,
+          opponentMessageCount
+        );
+        const winnerText = resolution === "player" ? "You win!" : "Opponent wins!";
+        const tieNote = yourScore === opponentScore ? " Tie breaker awarded the match based on participation." : "";
         const fallbackMsg = {
           sender: "Moderator",
-          text: `Scores - You: ${yourScore}, Opponent: ${opponentScore}. ${winner}`,
+          text: `Scores - You: ${yourScore}, Opponent: ${opponentScore}. ${winnerText}${tieNote}`,
           time: 0,
           isYourTurn: false
         };
@@ -576,10 +690,19 @@ function DebateRoom() {
       }
     } catch (error) {
       console.error("Error getting AI judgement:", error);
-      const winner = yourScore > opponentScore ? "You win!" : yourScore < opponentScore ? "Opponent wins!" : "Draw!";
+      const resolution = decideWinner(
+        yourScore,
+        opponentScore,
+        yourScore,
+        opponentScore,
+        playerArguments.length,
+        opponentArguments.length
+      );
+      const winnerText = resolution === "player" ? "You win!" : "Opponent wins!";
+      const tieNote = yourScore === opponentScore ? " Tie breaker awarded the match based on participation." : "";
       const errorMsg = {
         sender: "Moderator",
-        text: `Scores - You: ${yourScore}, Opponent: ${opponentScore}. ${winner}`,
+        text: `Scores - You: ${yourScore}, Opponent: ${opponentScore}. ${winnerText}${tieNote}`,
         time: 0,
         isYourTurn: false
       };
@@ -600,39 +723,11 @@ function DebateRoom() {
     setShowExitConfirm(false);
 
     if (!debateEnded && gameType === "ranked") {
-      const storedUser = parseStoredUser(localStorage.getItem("debatel_user"));
-      if (storedUser) {
-        const user: StoredUser = { ...storedUser };
-        const eloLoss = 30;
-        const newElo = Math.max(0, (user.elo ?? 0) - eloLoss);
-        const updatedLosses = (user.rankedLosses ?? 0) + 1;
-
-        user.elo = newElo;
-        user.rankedLosses = updatedLosses;
-        user.rankedWins = user.rankedWins ?? 0;
-        localStorage.setItem("debatel_user", JSON.stringify(user));
-        localStorage.setItem("debatel_recent_elo_change", `-${eloLoss}`);
-
-        const users = parseStoredUsers(localStorage.getItem("debatel_users"));
-        if (users.length > 0) {
-          const userIndex = users.findIndex((u) => u.username === user.username);
-          if (userIndex !== -1) {
-            users[userIndex] = {
-              ...users[userIndex],
-              elo: newElo,
-              rankedWins: user.rankedWins,
-              rankedLosses: updatedLosses
-            };
-            localStorage.setItem("debatel_users", JSON.stringify(users));
-          }
-        }
-
-        window.dispatchEvent(new Event("debatelUsersUpdated"));
-      }
+      applyRankedLossPenalty(30);
     }
 
     if (isMultiplayer && socket && matchId && !debateEnded) {
-      socket.emit("end-debate", { matchId });
+      socket.emit("end-debate", { matchId, forfeit: true });
     }
 
     router.push("/lobby?penalty=true");

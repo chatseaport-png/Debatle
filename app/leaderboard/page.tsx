@@ -34,6 +34,18 @@ const parseStoredUsers = (rawValue: string | null): StoredUser[] => {
   }
 };
 
+const safeNumber = (value: unknown): number => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
+const normalizeStoredUser = (user: StoredUser): StoredUser => ({
+  ...user,
+  elo: safeNumber(user.elo),
+  rankedWins: safeNumber(user.rankedWins),
+  rankedLosses: safeNumber(user.rankedLosses)
+});
+
 const computeLeaderboardRows = (users: StoredUser[]): LeaderboardRow[] =>
   users
     .map((user) => {
@@ -59,26 +71,44 @@ const getLeaderboardSnapshot = (): { rows: LeaderboardRow[]; session: StoredUser
     return { rows: [], session: null };
   }
 
-  const sessionUser = parseStoredUser(window.localStorage.getItem("debatel_user"));
-  let users = parseStoredUsers(window.localStorage.getItem("debatel_users"));
+  const sessionUserRaw = parseStoredUser(window.localStorage.getItem("debatel_user"));
+  const sessionUser = sessionUserRaw ? normalizeStoredUser(sessionUserRaw) : null;
+  let users = parseStoredUsers(window.localStorage.getItem("debatel_users")).map(normalizeStoredUser);
+
+  const deduped = new Map<string, StoredUser>();
+  users.forEach((user) => {
+    if (!user.username) return;
+    const existing = deduped.get(user.username);
+    if (existing) {
+      deduped.set(user.username, {
+        ...existing,
+        ...user,
+        elo: user.elo ?? existing.elo ?? 0,
+        rankedWins: user.rankedWins ?? existing.rankedWins ?? 0,
+        rankedLosses: user.rankedLosses ?? existing.rankedLosses ?? 0
+      });
+    } else {
+      deduped.set(user.username, user);
+    }
+  });
+
+  users = Array.from(deduped.values());
 
   if (sessionUser) {
-    const exists = users.some((user) => user.username === sessionUser.username);
-    if (!exists) {
-      users = [
-        ...users,
-        {
-          username: sessionUser.username,
-          email: sessionUser.email,
-          elo: sessionUser.elo ?? 0,
-          rankedWins: sessionUser.rankedWins ?? 0,
-          rankedLosses: sessionUser.rankedLosses ?? 0,
-          profileIcon: sessionUser.profileIcon,
-          profileBanner: sessionUser.profileBanner
-        }
-      ];
-      window.localStorage.setItem("debatel_users", JSON.stringify(users));
+    const userIndex = users.findIndex((user) => user.username === sessionUser.username);
+    if (userIndex === -1) {
+      users = [...users, sessionUser];
+    } else {
+      users[userIndex] = {
+        ...users[userIndex],
+        elo: sessionUser.elo ?? users[userIndex].elo ?? 0,
+        rankedWins: sessionUser.rankedWins ?? users[userIndex].rankedWins ?? 0,
+        rankedLosses: sessionUser.rankedLosses ?? users[userIndex].rankedLosses ?? 0,
+        profileIcon: sessionUser.profileIcon ?? users[userIndex].profileIcon,
+        profileBanner: sessionUser.profileBanner ?? users[userIndex].profileBanner
+      };
     }
+    window.localStorage.setItem("debatel_users", JSON.stringify(users));
   }
 
   return {
@@ -117,6 +147,11 @@ export default function Leaderboard() {
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("debatelUsersUpdated", handleUsersUpdated);
     };
+  }, [refreshLeaderboard]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => refreshLeaderboard());
+    return () => window.cancelAnimationFrame(frame);
   }, [refreshLeaderboard]);
 
   return (
