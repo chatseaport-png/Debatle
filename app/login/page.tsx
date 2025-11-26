@@ -20,8 +20,9 @@ export default function Login() {
 
     const storedUsers = localStorage.getItem("debatel_users");
     const users = storedUsers ? JSON.parse(storedUsers) : [];
+    const normalizedEmail = forgotEmail.trim().toLowerCase();
 
-    const user = users.find((u: any) => u.email === forgotEmail);
+    const user = users.find((u: any) => (u.email || "").toLowerCase() === normalizedEmail);
 
     if (user) {
       setForgotMessage(`Your username is: ${user.username}`);
@@ -35,6 +36,9 @@ export default function Login() {
     setError("");
     setLoading(true);
 
+    const normalizedIdentifier = identifier.trim();
+    const normalizedIdentifierLower = normalizedIdentifier.toLowerCase();
+
     try {
       // Get stored users from localStorage
       const storedUsers = localStorage.getItem("debatel_users");
@@ -42,7 +46,8 @@ export default function Login() {
 
       // Find user with matching email OR username
       const user = users.find((u: any) => 
-        u.email === identifier || u.username === identifier
+        (u.email || "").toLowerCase() === normalizedIdentifierLower ||
+        (u.username || "").toLowerCase() === normalizedIdentifierLower
       );
 
       if (!user) {
@@ -61,16 +66,29 @@ export default function Login() {
       const migratedElo = user.elo !== undefined ? user.elo : 0;
       const migratedIcon = user.profileIcon || "👤";
       const migratedBanner = user.profileBanner || "#3b82f6";
+      const migratedWins = user.rankedWins !== undefined ? user.rankedWins : 0;
+      const migratedLosses = user.rankedLosses !== undefined ? user.rankedLosses : 0;
 
       // Update the user in the users array if migration happened
-      if (user.elo === undefined || !user.profileIcon || !user.profileBanner) {
-        const userIndex = users.findIndex((u: any) => u.username === identifier || u.email === identifier);
+      if (
+        user.elo === undefined ||
+        !user.profileIcon ||
+        !user.profileBanner ||
+        user.rankedWins === undefined ||
+        user.rankedLosses === undefined
+      ) {
+        const userIndex = users.findIndex((u: any) => 
+          (u.username || "").toLowerCase() === normalizedIdentifierLower ||
+          (u.email || "").toLowerCase() === normalizedIdentifierLower
+        );
         if (userIndex !== -1) {
           users[userIndex] = {
             ...users[userIndex],
             elo: migratedElo,
             profileIcon: migratedIcon,
-            profileBanner: migratedBanner
+            profileBanner: migratedBanner,
+            rankedWins: migratedWins,
+            rankedLosses: migratedLosses
           };
           localStorage.setItem("debatel_users", JSON.stringify(users));
         }
@@ -82,7 +100,9 @@ export default function Login() {
         email: user.email,
         elo: migratedElo,
         profileIcon: migratedIcon,
-        profileBanner: migratedBanner
+        profileBanner: migratedBanner,
+        rankedWins: migratedWins,
+        rankedLosses: migratedLosses
       }));
 
       // Trigger storage event for navbar update
@@ -109,70 +129,72 @@ export default function Login() {
         </div>
       </nav>
 
-      {/* Forgot Username Modal */}
-      {showForgotUsername && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
-          <div className="w-full max-w-md border-2 border-black bg-white p-8">
-            <h3 className="mb-4 text-2xl font-bold text-black">Forgot Username</h3>
-            <p className="mb-6 text-sm text-gray-600">
-              Enter your email address and we'll show you your username.
-            </p>
-            
-            {forgotMessage && (
-              <div className={`mb-4 border-2 px-4 py-3 ${
-                forgotMessage.includes("No account") 
-                  ? "border-red-500 bg-red-50 text-red-700"
-                  : "border-green-500 bg-green-50 text-green-700"
-              }`}>
-                {forgotMessage}
-              </div>
-            )}
-
-            <form onSubmit={handleForgotUsername} className="space-y-4">
-              <div>
-                <label htmlFor="forgotEmail" className="block text-sm font-bold uppercase tracking-wide text-black">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  id="forgotEmail"
-                  value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                  className="mt-2 w-full border-2 border-gray-300 px-4 py-3 text-black focus:border-black focus:outline-none"
-                  placeholder="your.email@example.com"
-                  required
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  type="submit"
-                  className="flex-1 bg-black py-3 font-bold uppercase tracking-wide text-white transition hover:bg-gray-800"
-                >
-                  Find Username
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowForgotUsername(false);
-                    setForgotMessage("");
-                    setForgotEmail("");
-                  }}
-                  className="flex-1 border-2 border-black bg-white py-3 font-bold uppercase tracking-wide text-black transition hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
           <div className="mb-12 text-center">
             <h2 className="text-3xl font-bold text-black">Account Login</h2>
           </div>
+
+          {/* Forgot Username Modal */}
+          {showForgotUsername && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
+              <div className="w-full max-w-md border-2 border-black bg-white p-8">
+                <h3 className="mb-4 text-2xl font-bold text-black">Forgot Username</h3>
+                <p className="mb-6 text-sm text-gray-600">
+                  Enter your email address and we'll show you your username.
+                </p>
+
+                {forgotMessage && (
+                  <div
+                    className={`mb-4 border-2 px-4 py-3 ${
+                      forgotMessage.includes("No account")
+                        ? "border-red-500 bg-red-50 text-red-700"
+                        : "border-green-500 bg-green-50 text-green-700"
+                    }`}
+                  >
+                    {forgotMessage}
+                  </div>
+                )}
+
+                <form onSubmit={handleForgotUsername} className="space-y-4">
+                  <div>
+                    <label htmlFor="forgotEmail" className="block text-sm font-bold uppercase tracking-wide text-black">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      id="forgotEmail"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      className="mt-2 w-full border-2 border-gray-300 px-4 py-3 text-black focus:border-black focus:outline-none"
+                      placeholder="your.email@example.com"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      type="submit"
+                      className="flex-1 bg-black py-3 font-bold uppercase tracking-wide text-white transition hover:bg-gray-800"
+                    >
+                      Find Username
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowForgotUsername(false);
+                        setForgotMessage("");
+                        setForgotEmail("");
+                      }}
+                      className="flex-1 border-2 border-black bg-white py-3 font-bold uppercase tracking-wide text-black transition hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
 
           <div className="border-2 border-black bg-white p-10">
             {error && (

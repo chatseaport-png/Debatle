@@ -18,6 +18,10 @@ export default function Register() {
     setError("");
     setLoading(true);
 
+    const normalizedUsername = username.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedUsernameLower = normalizedUsername.toLowerCase();
+
     // Validation
     if (password !== confirmPassword) {
       setError("Passwords don't match!");
@@ -31,7 +35,7 @@ export default function Register() {
       return;
     }
 
-    if (username.length < 3) {
+    if (normalizedUsername.length < 3) {
       setError("Username must be at least 3 characters");
       setLoading(false);
       return;
@@ -43,14 +47,14 @@ export default function Register() {
       const users = storedUsers ? JSON.parse(storedUsers) : [];
 
       // Check if email already exists
-      if (users.some((u: any) => u.email === email)) {
+      if (users.some((u: any) => (u.email || "").toLowerCase() === normalizedEmail)) {
         setError("An account with this email already exists");
         setLoading(false);
         return;
       }
 
       // Check if username already exists
-      if (users.some((u: any) => u.username === username)) {
+      if (users.some((u: any) => (u.username || "").toLowerCase() === normalizedUsernameLower)) {
         setError("This username is already taken");
         setLoading(false);
         return;
@@ -58,13 +62,15 @@ export default function Register() {
 
       // Add new user
       const newUser = {
-        username,
-        email,
+        username: normalizedUsername,
+        email: normalizedEmail,
         password, // In production, this should be hashed
         createdAt: new Date().toISOString(),
         elo: 0, // Starting ELO
         profileIcon: "👤", // Default icon
-        profileBanner: "#3b82f6" // Default banner color (blue)
+        profileBanner: "#3b82f6", // Default banner color (blue)
+        rankedWins: 0,
+        rankedLosses: 0
       };
 
       users.push(newUser);
@@ -76,7 +82,9 @@ export default function Register() {
         email: newUser.email,
         elo: newUser.elo,
         profileIcon: newUser.profileIcon,
-        profileBanner: newUser.profileBanner
+        profileBanner: newUser.profileBanner,
+        rankedWins: newUser.rankedWins,
+        rankedLosses: newUser.rankedLosses
       }));
 
       // Trigger storage event for navbar update

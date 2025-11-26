@@ -18,6 +18,8 @@ export default function Lobby() {
   const [selectedType, setSelectedType] = useState<GameType>("practice");
   const [username, setUsername] = useState(() => `Player${Math.floor(Math.random() * 9999)}`);
   const [userElo, setUserElo] = useState(0);
+  const [rankedWins, setRankedWins] = useState(0);
+  const [rankedLosses, setRankedLosses] = useState(0);
   const [profileIcon, setProfileIcon] = useState("👤");
   const [profileBanner, setProfileBanner] = useState("#3b82f6");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -30,40 +32,65 @@ export default function Lobby() {
       const storedUser = localStorage.getItem("debatel_user");
       if (storedUser) {
         const user = JSON.parse(storedUser);
-        
+
         // Check if user has old ELO (1000 or 1500) and reset to 0
-        const needsMigration = user.elo === 1000 || user.elo === 1500 || user.elo > 2000;
-        const migratedElo = needsMigration ? 0 : (user.elo !== undefined ? user.elo : 0);
-        
-        // Update session if migration happened
-        if (needsMigration) {
-          const updatedUser = {
-            ...user,
-            elo: migratedElo,
-            profileIcon: user.profileIcon || "👤",
-            profileBanner: user.profileBanner || "#3b82f6"
-          };
-          localStorage.setItem("debatel_user", JSON.stringify(updatedUser));
-          
+        const needsEloMigration = user.elo === 1000 || user.elo === 1500 || user.elo > 2000;
+        const migratedElo = needsEloMigration ? 0 : (user.elo !== undefined ? user.elo : 0);
+        const migratedIcon = user.profileIcon || "👤";
+        const migratedBanner = user.profileBanner || "#3b82f6";
+        const migratedWins = user.rankedWins !== undefined ? user.rankedWins : 0;
+        const migratedLosses = user.rankedLosses !== undefined ? user.rankedLosses : 0;
+
+        const sessionUser = {
+          username: user.username,
+          email: user.email,
+          elo: migratedElo,
+          profileIcon: migratedIcon,
+          profileBanner: migratedBanner,
+          rankedWins: migratedWins,
+          rankedLosses: migratedLosses,
+        };
+
+        const needsSessionUpdate =
+          needsEloMigration ||
+          user.profileIcon === undefined ||
+          user.profileBanner === undefined ||
+          user.rankedWins === undefined ||
+          user.rankedLosses === undefined;
+
+        if (needsSessionUpdate) {
+          localStorage.setItem("debatel_user", JSON.stringify(sessionUser));
+
           // Also update in users array
           const storedUsers = localStorage.getItem("debatel_users");
           if (storedUsers) {
             const users = JSON.parse(storedUsers);
             const userIndex = users.findIndex((u: any) => u.username === user.username);
             if (userIndex !== -1) {
-              users[userIndex].elo = migratedElo;
+              users[userIndex] = {
+                ...users[userIndex],
+                elo: migratedElo,
+                profileIcon: migratedIcon,
+                profileBanner: migratedBanner,
+                rankedWins: migratedWins,
+                rankedLosses: migratedLosses,
+              };
               localStorage.setItem("debatel_users", JSON.stringify(users));
             }
           }
         }
-        
-        setUsername(user.username);
-        setUserElo(migratedElo);
-        setProfileIcon(user.profileIcon || "👤");
-        setProfileBanner(user.profileBanner || "#3b82f6");
+
+        setUsername(sessionUser.username);
+        setUserElo(sessionUser.elo);
+        setProfileIcon(sessionUser.profileIcon);
+        setProfileBanner(sessionUser.profileBanner);
+        setRankedWins(sessionUser.rankedWins);
+        setRankedLosses(sessionUser.rankedLosses);
         setIsLoggedIn(true);
       } else {
         setIsLoggedIn(false);
+        setRankedWins(0);
+        setRankedLosses(0);
       }
     };
 
@@ -244,15 +271,19 @@ export default function Lobby() {
                 <div className="text-xs uppercase tracking-wide text-gray-600">ELO Rating</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-green-600">{Math.floor(userElo / 30)}</div>
+                <div className="text-3xl font-bold text-green-600">{rankedWins}</div>
                 <div className="text-xs uppercase tracking-wide text-gray-600">Wins</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-red-600">0</div>
+                <div className="text-3xl font-bold text-red-600">{rankedLosses}</div>
                 <div className="text-xs uppercase tracking-wide text-gray-600">Losses</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-blue-600">{Math.floor(userElo / 30) > 0 ? "100" : "0"}%</div>
+                <div className="text-3xl font-bold text-blue-600">
+                  {rankedWins + rankedLosses > 0
+                    ? Math.round((rankedWins / (rankedWins + rankedLosses)) * 100)
+                    : 0}%
+                </div>
                 <div className="text-xs uppercase tracking-wide text-gray-600">Win Rate</div>
               </div>
             </div>

@@ -56,7 +56,7 @@ function DebateRoom() {
   const [isReadingBreak, setIsReadingBreak] = useState(false);
   const [nextTurn, setNextTurn] = useState<"player" | "opponent" | null>(null);
   const [pendingDebateEnd, setPendingDebateEnd] = useState(false);
-  const READING_DURATION = 10;
+  const READING_DURATION = 0;
   const opponentResponseTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Multiplayer socket listeners
@@ -97,9 +97,12 @@ function DebateRoom() {
           const user = JSON.parse(storedUser);
           const eloChange = 30; // Standard win ELO
           const newElo = Math.max(0, (user.elo || 0) + eloChange);
+          const updatedWins = (user.rankedWins !== undefined ? user.rankedWins : 0) + 1;
           
           // Update session
           user.elo = newElo;
+          user.rankedWins = updatedWins;
+          user.rankedLosses = user.rankedLosses !== undefined ? user.rankedLosses : 0;
           localStorage.setItem("debatel_user", JSON.stringify(user));
           
           // Update in users list
@@ -109,6 +112,8 @@ function DebateRoom() {
             const userIndex = users.findIndex((u: any) => u.username === user.username);
             if (userIndex !== -1) {
               users[userIndex].elo = newElo;
+              users[userIndex].rankedWins = updatedWins;
+              users[userIndex].rankedLosses = users[userIndex].rankedLosses !== undefined ? users[userIndex].rankedLosses : 0;
               localStorage.setItem("debatel_users", JSON.stringify(users));
             }
           }
@@ -449,10 +454,16 @@ function DebateRoom() {
             }
             
             const newElo = Math.max(0, (user.elo || 0) + eloChange); // Can't go below 0
+            const currentWins = user.rankedWins !== undefined ? user.rankedWins : 0;
+            const currentLosses = user.rankedLosses !== undefined ? user.rankedLosses : 0;
+            const updatedWins = eloChange > 0 ? currentWins + 1 : currentWins;
+            const updatedLosses = eloChange < 0 ? currentLosses + 1 : currentLosses;
             console.log("ELO change:", eloChange, "New ELO:", newElo);
             
             // Update session
             user.elo = newElo;
+            user.rankedWins = updatedWins;
+            user.rankedLosses = updatedLosses;
             localStorage.setItem("debatel_user", JSON.stringify(user));
             console.log("Updated localStorage debatel_user with new ELO:", newElo);
             
@@ -463,6 +474,8 @@ function DebateRoom() {
               const userIndex = users.findIndex((u: any) => u.username === user.username);
               if (userIndex !== -1) {
                 users[userIndex].elo = newElo;
+                users[userIndex].rankedWins = updatedWins;
+                users[userIndex].rankedLosses = updatedLosses;
                 localStorage.setItem("debatel_users", JSON.stringify(users));
               }
             }

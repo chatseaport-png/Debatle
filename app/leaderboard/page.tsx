@@ -22,14 +22,20 @@ export default function Leaderboard() {
       // Sort by ELO descending, show ALL users
       const sortedUsers = users
         .sort((a: any, b: any) => (b.elo || 0) - (a.elo || 0))
-        .map((user: any, index: number) => ({
-          rank: index + 1,
-          username: user.username,
-          elo: user.elo || 0,
-          wins: Math.floor((user.elo || 0) / 30),
-          losses: 0,
-          winRate: Math.floor((user.elo || 0) / 30) > 0 ? 100 : 0,
-        }));
+        .map((user: any, index: number) => {
+          const wins = user.rankedWins !== undefined ? user.rankedWins : 0;
+          const losses = user.rankedLosses !== undefined ? user.rankedLosses : 0;
+          const totalMatches = wins + losses;
+
+          return {
+            rank: index + 1,
+            username: user.username,
+            elo: user.elo || 0,
+            wins,
+            losses,
+            winRate: totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0,
+          };
+        });
       setLeaderboardData(sortedUsers);
     }
   }, []);
@@ -57,7 +63,7 @@ export default function Leaderboard() {
 
       <main className="mx-auto max-w-6xl px-4 py-12">
         {/* Rank Tiers */}
-        <div className="mb-10 border-2 border-black bg-gradient-to-b from-white to-gray-50 p-8 shadow-lg">
+  <div className="mb-10 border-2 border-black bg-linear-to-b from-white to-gray-50 p-8 shadow-lg">
           <h2 className="mb-6 text-center text-3xl font-bold text-black">Rank Tiers</h2>
           <div className="mb-6 mx-auto max-w-2xl rounded-lg bg-white border-2 border-gray-300 p-4 text-center text-sm text-gray-700 shadow-sm">
             <strong>Ranking System:</strong> Each rank has 3 sub-ranks (1, 2, 3). Each sub-rank requires 100 ELO. 
