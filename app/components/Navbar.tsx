@@ -1,30 +1,47 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { StoredUser } from "@/lib/types";
 
 export default function Navbar() {
-  const [user, setUser] = useState<{ username: string; email: string } | null>(null);
+  const [user, setUser] = useState<StoredUser | null>(() => {
+    if (typeof window === "undefined") return null;
+    const storedUser = window.localStorage.getItem("debatel_user");
+    if (!storedUser) return null;
+    try {
+      return JSON.parse(storedUser) as StoredUser;
+    } catch (error) {
+      console.error("Failed to parse stored user", error);
+      return null;
+    }
+  });
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   useEffect(() => {
-    // Check if user is logged in
-    const storedUser = localStorage.getItem("debatel_user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-
     // Listen for storage changes (in case user logs in/out in another tab)
-    const handleStorageChange = () => {
-      const updatedUser = localStorage.getItem("debatel_user");
-      setUser(updatedUser ? JSON.parse(updatedUser) : null);
+    const syncUser = () => {
+      const updatedUser = window.localStorage.getItem("debatel_user");
+      if (!updatedUser) {
+        setUser(null);
+        return;
+      }
+      try {
+        setUser(JSON.parse(updatedUser) as StoredUser);
+      } catch (error) {
+        console.error("Failed to parse updated user", error);
+      }
     };
 
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
+    window.addEventListener("storage", syncUser);
+    window.addEventListener("debatelUsersUpdated", syncUser);
+    return () => {
+      window.removeEventListener("storage", syncUser);
+      window.removeEventListener("debatelUsersUpdated", syncUser);
+    };
   }, []);
 
   // Close dropdown when clicking outside
@@ -41,12 +58,12 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dropdownOpen]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     localStorage.removeItem("debatel_user");
     setUser(null);
     setDropdownOpen(false);
     router.push("/");
-  };
+  }, [router]);
 
   return (
     <nav className="border-b border-gray-300 bg-white">

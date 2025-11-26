@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSocket } from "@/lib/socket";
 import { getRankByElo } from "@/lib/rankSystem";
+import { StoredUser } from "@/lib/types";
 
 type GameMode = "speed" | "standard";
 type DebateSide = "for" | "against";
@@ -28,18 +29,39 @@ export default function Lobby() {
 
   // Load username from localStorage if logged in and migrate old users
   useEffect(() => {
+    const parseUser = (rawValue: string | null): StoredUser | null => {
+      if (!rawValue) return null;
+      try {
+        return JSON.parse(rawValue) as StoredUser;
+      } catch (error) {
+        console.error("Failed to parse stored user", error);
+        return null;
+      }
+    };
+
+    const parseUsers = (rawValue: string | null): StoredUser[] => {
+      if (!rawValue) return [];
+      try {
+        const parsed = JSON.parse(rawValue) as StoredUser[];
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (error) {
+        console.error("Failed to parse stored users", error);
+        return [];
+      }
+    };
+
     const loadUserData = () => {
-      const storedUser = localStorage.getItem("debatel_user");
+      const storedUser = parseUser(localStorage.getItem("debatel_user"));
       if (storedUser) {
-        const user = JSON.parse(storedUser);
+        const user: StoredUser = { ...storedUser };
 
         // Check if user has old ELO (1000 or 1500) and reset to 0
-        const needsEloMigration = user.elo === 1000 || user.elo === 1500 || user.elo > 2000;
-        const migratedElo = needsEloMigration ? 0 : (user.elo !== undefined ? user.elo : 0);
-        const migratedIcon = user.profileIcon || "👤";
-        const migratedBanner = user.profileBanner || "#3b82f6";
-        const migratedWins = user.rankedWins !== undefined ? user.rankedWins : 0;
-        const migratedLosses = user.rankedLosses !== undefined ? user.rankedLosses : 0;
+        const needsEloMigration = user.elo === 1000 || user.elo === 1500 || (user.elo ?? 0) > 2000;
+        const migratedElo = needsEloMigration ? 0 : user.elo ?? 0;
+        const migratedIcon = user.profileIcon ?? "👤";
+        const migratedBanner = user.profileBanner ?? "#3b82f6";
+        const migratedWins = user.rankedWins ?? 0;
+        const migratedLosses = user.rankedLosses ?? 0;
 
         const sessionUser = {
           username: user.username,
@@ -62,10 +84,9 @@ export default function Lobby() {
           localStorage.setItem("debatel_user", JSON.stringify(sessionUser));
 
           // Also update in users array
-          const storedUsers = localStorage.getItem("debatel_users");
-          if (storedUsers) {
-            const users = JSON.parse(storedUsers);
-            const userIndex = users.findIndex((u: any) => u.username === user.username);
+          const users = parseUsers(localStorage.getItem("debatel_users"));
+          if (users.length > 0) {
+            const userIndex = users.findIndex((u) => u.username === user.username);
             if (userIndex !== -1) {
               users[userIndex] = {
                 ...users[userIndex],
@@ -76,6 +97,7 @@ export default function Lobby() {
                 rankedLosses: migratedLosses,
               };
               localStorage.setItem("debatel_users", JSON.stringify(users));
+              window.dispatchEvent(new Event("debatelUsersUpdated"));
             }
           }
         }
@@ -110,10 +132,12 @@ export default function Lobby() {
 
     window.addEventListener("focus", handleFocus);
     window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("debatelUsersUpdated", loadUserData);
 
     return () => {
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("debatelUsersUpdated", loadUserData);
     };
   }, []);
 
@@ -121,7 +145,7 @@ export default function Lobby() {
     if (!socket) return;
 
     // Listen for match found
-    socket.on("match-found", ({ matchId, opponent, yourSide, opponentSide, goesFirst, topicIndex }) => {
+  socket.on("match-found", ({ matchId, opponent, yourSide, goesFirst, topicIndex }) => {
       console.log("Match found!", { matchId, opponent, yourSide, goesFirst, topicIndex });
       setInQueue(false); // Stop queue timer when match is found
       router.push(`/debate?mode=${selectedMode}&side=${yourSide}&matchId=${matchId}&multiplayer=true&goesFirst=${goesFirst}&type=${selectedType}&opponentUsername=${encodeURIComponent(opponent.username)}&opponentElo=${opponent.elo !== undefined ? opponent.elo : 0}&opponentIcon=${encodeURIComponent(opponent.icon || "👤")}&opponentBanner=${encodeURIComponent(opponent.banner || "#3b82f6")}&userElo=${userElo}&userIcon=${encodeURIComponent(profileIcon)}&userBanner=${encodeURIComponent(profileBanner)}&topicIndex=${topicIndex}`);

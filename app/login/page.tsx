@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { StoredUser } from "@/lib/types";
 
 export default function Login() {
   const [identifier, setIdentifier] = useState("");
@@ -19,10 +20,17 @@ export default function Login() {
     setForgotMessage("");
 
     const storedUsers = localStorage.getItem("debatel_users");
-    const users = storedUsers ? JSON.parse(storedUsers) : [];
+    let users: StoredUser[] = [];
+    if (storedUsers) {
+      try {
+        users = JSON.parse(storedUsers) as StoredUser[];
+      } catch (error) {
+        console.error("Failed to parse stored users", error);
+      }
+    }
     const normalizedEmail = forgotEmail.trim().toLowerCase();
 
-    const user = users.find((u: any) => (u.email || "").toLowerCase() === normalizedEmail);
+    const user = users.find((u) => (u.email ?? "").toLowerCase() === normalizedEmail);
 
     if (user) {
       setForgotMessage(`Your username is: ${user.username}`);
@@ -42,12 +50,19 @@ export default function Login() {
     try {
       // Get stored users from localStorage
       const storedUsers = localStorage.getItem("debatel_users");
-      const users = storedUsers ? JSON.parse(storedUsers) : [];
+      let users: StoredUser[] = [];
+      if (storedUsers) {
+        try {
+          users = JSON.parse(storedUsers) as StoredUser[];
+        } catch (error) {
+          console.error("Failed to parse stored users", error);
+        }
+      }
 
       // Find user with matching email OR username
-      const user = users.find((u: any) => 
-        (u.email || "").toLowerCase() === normalizedIdentifierLower ||
-        (u.username || "").toLowerCase() === normalizedIdentifierLower
+      const user = users.find((u) => 
+        (u.email ?? "").toLowerCase() === normalizedIdentifierLower ||
+        (u.username ?? "").toLowerCase() === normalizedIdentifierLower
       );
 
       if (!user) {
@@ -63,11 +78,11 @@ export default function Login() {
       }
 
       // Migrate old users without elo/icon/banner and update in storage
-      const migratedElo = user.elo !== undefined ? user.elo : 0;
-      const migratedIcon = user.profileIcon || "👤";
-      const migratedBanner = user.profileBanner || "#3b82f6";
-      const migratedWins = user.rankedWins !== undefined ? user.rankedWins : 0;
-      const migratedLosses = user.rankedLosses !== undefined ? user.rankedLosses : 0;
+  const migratedElo = user.elo ?? 0;
+  const migratedIcon = user.profileIcon ?? "👤";
+  const migratedBanner = user.profileBanner ?? "#3b82f6";
+  const migratedWins = user.rankedWins ?? 0;
+  const migratedLosses = user.rankedLosses ?? 0;
 
       // Update the user in the users array if migration happened
       if (
@@ -77,9 +92,9 @@ export default function Login() {
         user.rankedWins === undefined ||
         user.rankedLosses === undefined
       ) {
-        const userIndex = users.findIndex((u: any) => 
-          (u.username || "").toLowerCase() === normalizedIdentifierLower ||
-          (u.email || "").toLowerCase() === normalizedIdentifierLower
+        const userIndex = users.findIndex((u) => 
+          (u.username ?? "").toLowerCase() === normalizedIdentifierLower ||
+          (u.email ?? "").toLowerCase() === normalizedIdentifierLower
         );
         if (userIndex !== -1) {
           users[userIndex] = {
@@ -91,6 +106,7 @@ export default function Login() {
             rankedLosses: migratedLosses
           };
           localStorage.setItem("debatel_users", JSON.stringify(users));
+          window.dispatchEvent(new Event("debatelUsersUpdated"));
         }
       }
 
@@ -106,11 +122,12 @@ export default function Login() {
       }));
 
       // Trigger storage event for navbar update
-      window.dispatchEvent(new Event("storage"));
+  window.dispatchEvent(new Event("storage"));
+  window.dispatchEvent(new Event("debatelUsersUpdated"));
 
       // Redirect to lobby
       router.push("/lobby");
-    } catch (err) {
+    } catch {
       setError("An error occurred. Please try again.");
       setLoading(false);
     }
@@ -141,7 +158,7 @@ export default function Login() {
               <div className="w-full max-w-md border-2 border-black bg-white p-8">
                 <h3 className="mb-4 text-2xl font-bold text-black">Forgot Username</h3>
                 <p className="mb-6 text-sm text-gray-600">
-                  Enter your email address and we'll show you your username.
+                  Enter your email address and we&apos;ll show you your username.
                 </p>
 
                 {forgotMessage && (

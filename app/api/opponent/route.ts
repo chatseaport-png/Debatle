@@ -7,7 +7,7 @@ const openai = new OpenAI({
 
 export async function POST(request: Request) {
   try {
-    const { topic, description, opponentSide, playerArguments, opponentArguments, turnNumber } = await request.json();
+  const { topic, description, opponentSide, playerArguments, opponentArguments } = await request.json();
 
     if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === '') {
       console.error("OpenAI API key not configured");

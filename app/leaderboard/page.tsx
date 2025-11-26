@@ -3,41 +3,81 @@
 import Link from "next/link";
 import { ranks, getRankByElo } from "@/lib/rankSystem";
 import { useEffect, useState } from "react";
+import { StoredUser } from "@/lib/types";
+
+interface LeaderboardEntry {
+  rank: number;
+  username: string;
+  elo: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+}
+
+const parseStoredUser = (rawValue: string | null): StoredUser | null => {
+  if (!rawValue) return null;
+  try {
+    return JSON.parse(rawValue) as StoredUser;
+  } catch (error) {
+    console.error("Failed to parse stored user", error);
+    return null;
+  }
+};
+
+const parseStoredUsers = (rawValue: string | null): StoredUser[] => {
+  if (!rawValue) return [];
+  try {
+    const parsed = JSON.parse(rawValue) as StoredUser[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("Failed to parse stored users", error);
+    return [];
+  }
+};
+
+const buildLeaderboard = (users: StoredUser[]): LeaderboardEntry[] => {
+  return [...users]
+    .sort((a, b) => (b.elo ?? 0) - (a.elo ?? 0))
+    .map((user, index) => {
+      const wins = user.rankedWins ?? 0;
+      const losses = user.rankedLosses ?? 0;
+      const totalMatches = wins + losses;
+
+      return {
+        rank: index + 1,
+        username: user.username,
+        elo: user.elo ?? 0,
+        wins,
+        losses,
+        winRate: totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0,
+      };
+    });
+};
 
 export default function Leaderboard() {
-  const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>(() => {
+    if (typeof window === "undefined") return [];
+    return buildLeaderboard(parseStoredUsers(window.localStorage.getItem("debatel_users")));
+  });
+  const [currentUser, setCurrentUser] = useState<StoredUser | null>(() => {
+    if (typeof window === "undefined") return null;
+    return parseStoredUser(window.localStorage.getItem("debatel_user"));
+  });
 
   useEffect(() => {
-    // Load all users from localStorage
-    const storedUsers = localStorage.getItem("debatel_users");
-    const storedUser = localStorage.getItem("debatel_user");
-    
-    if (storedUser) {
-      setCurrentUser(JSON.parse(storedUser));
-    }
-    
-    if (storedUsers) {
-      const users = JSON.parse(storedUsers);
-      // Sort by ELO descending, show ALL users
-      const sortedUsers = users
-        .sort((a: any, b: any) => (b.elo || 0) - (a.elo || 0))
-        .map((user: any, index: number) => {
-          const wins = user.rankedWins !== undefined ? user.rankedWins : 0;
-          const losses = user.rankedLosses !== undefined ? user.rankedLosses : 0;
-          const totalMatches = wins + losses;
+    const updateLeaderboard = () => {
+      if (typeof window === "undefined") return;
+      setLeaderboardData(buildLeaderboard(parseStoredUsers(window.localStorage.getItem("debatel_users"))));
+      setCurrentUser(parseStoredUser(window.localStorage.getItem("debatel_user")));
+    };
 
-          return {
-            rank: index + 1,
-            username: user.username,
-            elo: user.elo || 0,
-            wins,
-            losses,
-            winRate: totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0,
-          };
-        });
-      setLeaderboardData(sortedUsers);
-    }
+    window.addEventListener("storage", updateLeaderboard);
+    window.addEventListener("debatelUsersUpdated", updateLeaderboard);
+
+    return () => {
+      window.removeEventListener("storage", updateLeaderboard);
+      window.removeEventListener("debatelUsersUpdated", updateLeaderboard);
+    };
   }, []);
 
   return (

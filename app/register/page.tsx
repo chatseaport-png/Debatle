@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { StoredUser } from "@/lib/types";
 
 export default function Register() {
   const [username, setUsername] = useState("");
@@ -44,17 +45,24 @@ export default function Register() {
     try {
       // Get existing users from localStorage
       const storedUsers = localStorage.getItem("debatel_users");
-      const users = storedUsers ? JSON.parse(storedUsers) : [];
+      let users: StoredUser[] = [];
+      if (storedUsers) {
+        try {
+          users = JSON.parse(storedUsers) as StoredUser[];
+        } catch (error) {
+          console.error("Failed to parse stored users", error);
+        }
+      }
 
       // Check if email already exists
-      if (users.some((u: any) => (u.email || "").toLowerCase() === normalizedEmail)) {
+      if (users.some((u) => (u.email ?? "").toLowerCase() === normalizedEmail)) {
         setError("An account with this email already exists");
         setLoading(false);
         return;
       }
 
       // Check if username already exists
-      if (users.some((u: any) => (u.username || "").toLowerCase() === normalizedUsernameLower)) {
+      if (users.some((u) => (u.username ?? "").toLowerCase() === normalizedUsernameLower)) {
         setError("This username is already taken");
         setLoading(false);
         return;
@@ -89,10 +97,11 @@ export default function Register() {
 
       // Trigger storage event for navbar update
       window.dispatchEvent(new Event("storage"));
+      window.dispatchEvent(new Event("debatelUsersUpdated"));
 
       // Redirect to lobby
       router.push("/lobby");
-    } catch (err) {
+    } catch {
       setError("An error occurred. Please try again.");
       setLoading(false);
     }

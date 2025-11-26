@@ -36,7 +36,7 @@ export default function Support() {
         {submitted && (
           <div className="mb-6 border-l-4 border-black bg-green-50 p-4">
             <p className="font-semibold text-black">Message sent successfully!</p>
-            <p className="text-sm text-gray-600">We'll get back to you soon.</p>
+            <p className="text-sm text-gray-600">We&apos;ll get back to you soon.</p>
           </div>
         )}
 
@@ -81,7 +81,7 @@ export default function Support() {
                 value={formData.message}
                 onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                 className="mt-2 w-full resize-none border-2 border-gray-300 px-4 py-3 text-black focus:border-black focus:outline-none"
-                placeholder="Tell us what's on your mind..."
+                placeholder="Tell us what&apos;s on your mind..."
                 rows={6}
                 required
               />

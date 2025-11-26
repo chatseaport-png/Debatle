@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Navbar from "../components/Navbar";
 import { getRankByElo } from "@/lib/rankSystem";
+import { StoredUser } from "@/lib/types";
 
 const availableIcons = ["👤", "😀", "😎", "🤓", "🧠", "👨‍💼", "👩‍💼", "🦸", "🦹", "🤖", "👽", "🎭", "🎪", "⚡", "🔥", "💎", "👑", "🏆"];
 const availableColors = [
@@ -20,65 +21,100 @@ const availableColors = [
   { name: "Black", value: "#000000" },
 ];
 
+const parseStoredUser = (rawValue: string | null): StoredUser | null => {
+  if (!rawValue) return null;
+  try {
+    return JSON.parse(rawValue) as StoredUser;
+  } catch (error) {
+    console.error("Failed to parse stored user", error);
+    return null;
+  }
+};
+
+const parseStoredUsers = (rawValue: string | null): StoredUser[] => {
+  if (!rawValue) return [];
+  try {
+    const parsed = JSON.parse(rawValue) as StoredUser[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("Failed to parse stored users", error);
+    return [];
+  }
+};
+
 export default function Profile() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [selectedIcon, setSelectedIcon] = useState("👤");
-  const [selectedBanner, setSelectedBanner] = useState("#3b82f6");
+  const initialUser = typeof window === "undefined" ? null : parseStoredUser(window.localStorage.getItem("debatel_user"));
+  const initialRecentChange = typeof window === "undefined" ? null : window.localStorage.getItem("debatel_recent_elo_change");
+  const initialEloChange = initialRecentChange ? parseInt(initialRecentChange, 10) : null;
+  const [user, setUser] = useState<StoredUser | null>(initialUser);
+  const [selectedIcon, setSelectedIcon] = useState(initialUser?.profileIcon ?? "👤");
+  const [selectedBanner, setSelectedBanner] = useState(initialUser?.profileBanner ?? "#3b82f6");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [eloChange, setEloChange] = useState<number | null>(null);
-  const [showEloChange, setShowEloChange] = useState(false);
+  const [eloChange, setEloChange] = useState<number | null>(initialEloChange);
+  const [showEloChange, setShowEloChange] = useState(Boolean(initialRecentChange));
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("debatel_user");
-    if (!storedUser) {
+    if (!user) {
       router.push("/login");
       return;
-    }
-    const userData = JSON.parse(storedUser);
-    setUser(userData);
-    setSelectedIcon(userData.profileIcon || "👤");
-    setSelectedBanner(userData.profileBanner || "#3b82f6");
-
-    // Check for recent ELO change
-    const recentEloChange = localStorage.getItem("debatel_recent_elo_change");
-    if (recentEloChange) {
-      const change = parseInt(recentEloChange);
-      setEloChange(change);
-      setShowEloChange(true);
-      // Clear after showing
-      setTimeout(() => {
-        setShowEloChange(false);
-        localStorage.removeItem("debatel_recent_elo_change");
-      }, 5000);
     }
 
     // Listen for storage changes (ELO updates from other tabs/windows)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "debatel_user" && e.newValue) {
-        const updatedUser = JSON.parse(e.newValue);
-        setUser(updatedUser);
+        const updatedUser = parseStoredUser(e.newValue);
+        if (updatedUser) {
+          setUser(updatedUser);
+          setSelectedIcon(updatedUser.profileIcon ?? "👤");
+          setSelectedBanner(updatedUser.profileBanner ?? "#3b82f6");
+        }
       }
       if (e.key === "debatel_recent_elo_change" && e.newValue) {
         const change = parseInt(e.newValue);
         setEloChange(change);
         setShowEloChange(true);
-        setTimeout(() => {
-          setShowEloChange(false);
-        }, 5000);
+      }
+    };
+
+    const handleUsersUpdated = () => {
+      const updatedUser = parseStoredUser(window.localStorage.getItem("debatel_user"));
+      if (updatedUser) {
+        setUser(updatedUser);
+        setSelectedIcon(updatedUser.profileIcon ?? "👤");
+        setSelectedBanner(updatedUser.profileBanner ?? "#3b82f6");
       }
     };
 
     window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, [router]);
+    window.addEventListener("debatelUsersUpdated", handleUsersUpdated);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("debatelUsersUpdated", handleUsersUpdated);
+    };
+  }, [router, user]);
+
+  useEffect(() => {
+    if (!showEloChange) return;
+    const timeoutId = window.setTimeout(() => {
+      setShowEloChange(false);
+      window.localStorage.removeItem("debatel_recent_elo_change");
+    }, 5000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [showEloChange]);
 
   const handleSave = () => {
     setLoading(true);
     
     // Update current user session
-    const updatedUser = {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    const updatedUser: StoredUser = {
       ...user,
       profileIcon: selectedIcon,
       profileBanner: selectedBanner,
@@ -86,50 +122,32 @@ export default function Profile() {
     localStorage.setItem("debatel_user", JSON.stringify(updatedUser));
 
     // Update in users list
-    const storedUsers = localStorage.getItem("debatel_users");
-    if (storedUsers) {
-      const users = JSON.parse(storedUsers);
-      const userIndex = users.findIndex((u: any) => u.username === user.username);
+    const storedUsers = parseStoredUsers(localStorage.getItem("debatel_users"));
+    if (storedUsers.length > 0) {
+      const userIndex = storedUsers.findIndex((u) => u.username === user.username);
       if (userIndex !== -1) {
-        users[userIndex] = { ...users[userIndex], profileIcon: selectedIcon, profileBanner: selectedBanner };
-        localStorage.setItem("debatel_users", JSON.stringify(users));
+        storedUsers[userIndex] = {
+          ...storedUsers[userIndex],
+          profileIcon: selectedIcon,
+          profileBanner: selectedBanner,
+        };
+        localStorage.setItem("debatel_users", JSON.stringify(storedUsers));
       }
     }
 
     setUser(updatedUser);
     setSuccess(true);
     setLoading(false);
+    window.dispatchEvent(new Event("debatelUsersUpdated"));
     
     setTimeout(() => setSuccess(false), 3000);
-  };
-
-  const handleResetElo = () => {
-    if (!confirm("Are you sure you want to reset your ELO to 0? This cannot be undone.")) {
-      return;
-    }
-    
-    const updatedUser = { ...user, elo: 0 };
-    localStorage.setItem("debatel_user", JSON.stringify(updatedUser));
-
-    const storedUsers = localStorage.getItem("debatel_users");
-    if (storedUsers) {
-      const users = JSON.parse(storedUsers);
-      const userIndex = users.findIndex((u: any) => u.username === user.username);
-      if (userIndex !== -1) {
-        users[userIndex] = { ...users[userIndex], elo: 0 };
-        localStorage.setItem("debatel_users", JSON.stringify(users));
-      }
-    }
-
-    setUser(updatedUser);
-    window.location.reload();
   };
 
   if (!user) {
     return <div className="min-h-screen bg-gray-100 flex items-center justify-center">Loading...</div>;
   }
 
-  const rank = getRankByElo(user.elo !== undefined ? user.elo : 0);
+  const rank = getRankByElo(user.elo ?? 0);
 
   return (
     <div className="min-h-screen bg-gray-100">

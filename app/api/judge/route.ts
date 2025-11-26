@@ -5,9 +5,27 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+interface DebateArgument {
+  text: string;
+}
+
+interface JudgeRequestBody {
+  topic: string;
+  description: string;
+  playerArguments: DebateArgument[];
+  opponentArguments: DebateArgument[];
+  playerSide: "for" | "against";
+}
+
 export async function POST(request: Request) {
   try {
-    const { topic, description, playerArguments, opponentArguments, playerSide } = await request.json();
+    const {
+      topic,
+      description,
+      playerArguments,
+      opponentArguments,
+      playerSide
+    } = (await request.json()) as JudgeRequestBody;
 
     if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === '') {
       console.error("OpenAI API key not configured");
@@ -27,10 +45,10 @@ DEBATE TOPIC: ${topic}
 RESOLUTION: ${description}
 
 PLAYER POSITION (arguing ${playerSide.toUpperCase()}):
-${playerArguments.map((arg: any, i: number) => `Argument ${i + 1}: ${arg.text}`).join('\n\n')}
+${playerArguments.map((arg, i) => `Argument ${i + 1}: ${arg.text}`).join('\n\n')}
 
 OPPONENT POSITION (arguing ${playerSide === 'for' ? 'AGAINST' : 'FOR'}):
-${opponentArguments.map((arg: any, i: number) => `Argument ${i + 1}: ${arg.text}`).join('\n\n')}
+${opponentArguments.map((arg, i) => `Argument ${i + 1}: ${arg.text}`).join('\n\n')}
 
 EVALUATION CRITERIA:
 
