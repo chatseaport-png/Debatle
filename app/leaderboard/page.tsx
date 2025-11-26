@@ -1,11 +1,10 @@
 "use client";
-
 import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ranks, getRankByElo } from "@/lib/rankSystem";
-import { useEffect, useState } from "react";
 import { StoredUser } from "@/lib/types";
 
-interface LeaderboardEntry {
+interface LeaderboardRow {
   rank: number;
   username: string;
   elo: number;
@@ -35,50 +34,90 @@ const parseStoredUsers = (rawValue: string | null): StoredUser[] => {
   }
 };
 
-const buildLeaderboard = (users: StoredUser[]): LeaderboardEntry[] => {
-  return [...users]
-    .sort((a, b) => (b.elo ?? 0) - (a.elo ?? 0))
-    .map((user, index) => {
+const computeLeaderboardRows = (users: StoredUser[]): LeaderboardRow[] =>
+  users
+    .map((user) => {
       const wins = user.rankedWins ?? 0;
       const losses = user.rankedLosses ?? 0;
       const totalMatches = wins + losses;
-
       return {
-        rank: index + 1,
         username: user.username,
         elo: user.elo ?? 0,
         wins,
         losses,
-        winRate: totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0,
+        winRate: totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0
       };
-    });
+    })
+    .sort((a, b) => b.elo - a.elo)
+    .map((entry, index) => ({
+      ...entry,
+      rank: index + 1
+    }));
+
+const getLeaderboardSnapshot = (): { rows: LeaderboardRow[]; session: StoredUser | null } => {
+  if (typeof window === "undefined") {
+    return { rows: [], session: null };
+  }
+
+  const sessionUser = parseStoredUser(window.localStorage.getItem("debatel_user"));
+  let users = parseStoredUsers(window.localStorage.getItem("debatel_users"));
+
+  if (sessionUser) {
+    const exists = users.some((user) => user.username === sessionUser.username);
+    if (!exists) {
+      users = [
+        ...users,
+        {
+          username: sessionUser.username,
+          email: sessionUser.email,
+          elo: sessionUser.elo ?? 0,
+          rankedWins: sessionUser.rankedWins ?? 0,
+          rankedLosses: sessionUser.rankedLosses ?? 0,
+          profileIcon: sessionUser.profileIcon,
+          profileBanner: sessionUser.profileBanner
+        }
+      ];
+      window.localStorage.setItem("debatel_users", JSON.stringify(users));
+    }
+  }
+
+  return {
+    rows: computeLeaderboardRows(users),
+    session: sessionUser
+  };
 };
 
 export default function Leaderboard() {
-  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>(() => {
-    if (typeof window === "undefined") return [];
-    return buildLeaderboard(parseStoredUsers(window.localStorage.getItem("debatel_users")));
-  });
-  const [currentUser, setCurrentUser] = useState<StoredUser | null>(() => {
-    if (typeof window === "undefined") return null;
-    return parseStoredUser(window.localStorage.getItem("debatel_user"));
-  });
+  const initialSnapshot = useMemo(() => getLeaderboardSnapshot(), []);
+  const [leaderboardData, setLeaderboardData] = useState<LeaderboardRow[]>(initialSnapshot.rows);
+  const [currentUser, setCurrentUser] = useState<StoredUser | null>(initialSnapshot.session);
+
+  const refreshLeaderboard = useCallback(() => {
+    const snapshot = getLeaderboardSnapshot();
+    setLeaderboardData(snapshot.rows);
+    setCurrentUser(snapshot.session);
+  }, []);
 
   useEffect(() => {
-    const updateLeaderboard = () => {
-      if (typeof window === "undefined") return;
-      setLeaderboardData(buildLeaderboard(parseStoredUsers(window.localStorage.getItem("debatel_users"))));
-      setCurrentUser(parseStoredUser(window.localStorage.getItem("debatel_user")));
+    const handleStorage = (event: StorageEvent) => {
+      if (!event.key || event.key.startsWith("debatel_")) {
+        refreshLeaderboard();
+      }
     };
 
-    window.addEventListener("storage", updateLeaderboard);
-    window.addEventListener("debatelUsersUpdated", updateLeaderboard);
+    const handleUsersUpdated = () => refreshLeaderboard();
+    const handleFocus = () => refreshLeaderboard();
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("debatelUsersUpdated", handleUsersUpdated);
 
     return () => {
-      window.removeEventListener("storage", updateLeaderboard);
-      window.removeEventListener("debatelUsersUpdated", updateLeaderboard);
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("debatelUsersUpdated", handleUsersUpdated);
     };
-  }, []);
+  }, [refreshLeaderboard]);
 
   return (
     <div className="min-h-screen bg-white">

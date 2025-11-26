@@ -7,6 +7,7 @@ const { Server } = require('socket.io');
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0'; // Bind to all network interfaces
 const port = process.env.PORT || 3000; // Use Railway's PORT or default to 3000
+const TOTAL_ROUNDS = 5;
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
@@ -77,7 +78,9 @@ app.prepare().then(() => {
           currentTurn: opponent.side === 'for' ? opponent.socketId : socket.id,
           messages: [],
           scores: { [opponent.socketId]: 0, [socket.id]: 0 },
-          round: 0
+          round: 1,
+          totalRounds: TOTAL_ROUNDS,
+          messagesPlayed: 0
         };
         
         activeMatches.set(matchId, match);
@@ -135,6 +138,11 @@ app.prepare().then(() => {
         socket.emit('error', { message: 'Not your turn' });
         return;
       }
+
+      if (match.messagesPlayed >= match.totalRounds * 2) {
+        socket.emit('error', { message: 'Debate already completed' });
+        return;
+      }
       
       // Add message to match
       match.messages.push({
@@ -142,22 +150,38 @@ app.prepare().then(() => {
         text: message,
         time
       });
+
+      match.messagesPlayed = (match.messagesPlayed || 0) + 1;
+      const totalRounds = match.totalRounds || TOTAL_ROUNDS;
+      const currentRound = Math.min(totalRounds, Math.ceil(match.messagesPlayed / 2));
+      const roundCompleted = match.messagesPlayed % 2 === 0;
+      const debateComplete = roundCompleted && currentRound >= totalRounds;
       
       // Switch turns
       match.currentTurn = socket.id === match.player1.id ? match.player2.id : match.player1.id;
-      match.round++;
       
       // Broadcast message to both players
       io.to(matchId).emit('opponent-message', {
         text: message,
         time,
-        round: match.round,
-        senderId: socket.id
+        round: currentRound,
+        roundCompleted,
+        senderId: socket.id,
+        totalRounds
       });
+
+      if (debateComplete) {
+        io.to(matchId).emit('debate-ended');
+        activeMatches.delete(matchId);
+        console.log(`Match completed: ${matchId}`);
+        return;
+      }
       
       // Notify turn change
       io.to(matchId).emit('turn-change', {
-        currentTurn: match.currentTurn
+        currentTurn: match.currentTurn,
+        round: roundCompleted ? Math.min(currentRound + 1, totalRounds) : currentRound,
+        roundCompleted
       });
     });
 

@@ -9,6 +9,21 @@ import { useSocket } from "@/lib/socket";
 import { getRankByElo } from "@/lib/rankSystem";
 import { AiJudgement, DebateMessage, StoredUser } from "@/lib/types";
 
+interface OpponentMessagePayload {
+  text: string;
+  time: number;
+  senderId: string;
+  round?: number;
+  roundCompleted?: boolean;
+  totalRounds?: number;
+}
+
+interface TurnChangePayload {
+  currentTurn: string | null;
+  round?: number;
+  roundCompleted?: boolean;
+}
+
 const parseStoredUser = (rawValue: string | null): StoredUser | null => {
   if (!rawValue) return null;
   try {
@@ -83,10 +98,9 @@ function DebateRoom() {
   useEffect(() => {
     if (!socket || !isMultiplayer || !matchId) return;
 
-    socket.on("opponent-message", ({ text, time, senderId, round: incomingRound }) => {
+    socket.on("opponent-message", ({ text, time, senderId, round: incomingRound, roundCompleted }: OpponentMessagePayload) => {
       if (typeof incomingRound === "number") {
-        setRound(incomingRound);
-        setMessagesThisRound(incomingRound % 2 === 0 ? 0 : 1);
+        setRound(Math.min(incomingRound, totalRounds));
       }
 
       // Ignore echoes of our own message after updating round data
@@ -101,6 +115,12 @@ function DebateRoom() {
 
       setMessages(prev => [...prev, opponentMsg]);
 
+      if (roundCompleted) {
+        setMessagesThisRound(0);
+      } else {
+        setMessagesThisRound(1);
+      }
+
       // Only award practice-mode placeholder points
       if (!isMultiplayer) {
         const opponentPoints = Math.floor(Math.random() * 25) + 20;
@@ -108,11 +128,19 @@ function DebateRoom() {
       }
     });
 
-    socket.on("turn-change", ({ currentTurn }) => {
+    socket.on("turn-change", ({ currentTurn, round: nextRound, roundCompleted }: TurnChangePayload) => {
       setIsYourTurn(socket.id === currentTurn);
       setHasSubmitted(false);
       setTimeLeft(timePerTurn);
+      if (typeof nextRound === "number") {
+        setRound(Math.min(nextRound, totalRounds));
+      }
       setMessagesThisRound(0);
+
+      if (roundCompleted && (nextRound ?? totalRounds) >= totalRounds) {
+        // Server will emit debate-ended; this ensures timer halts immediately
+        setIsReadingBreak(false);
+      }
     });
 
     socket.on("opponent-disconnected", () => {
@@ -407,6 +435,7 @@ function DebateRoom() {
     
     // Send to opponent if multiplayer
     if (isMultiplayer && socket && matchId) {
+      setMessagesThisRound(1);
       socket.emit("send-message", {
         matchId,
         message: currentMessage,
