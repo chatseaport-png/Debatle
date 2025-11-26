@@ -74,6 +74,7 @@ const getLeaderboardSnapshot = (): { rows: LeaderboardRow[]; session: StoredUser
   const sessionUserRaw = parseStoredUser(window.localStorage.getItem("debatel_user"));
   const sessionUser = sessionUserRaw ? normalizeStoredUser(sessionUserRaw) : null;
   let users = parseStoredUsers(window.localStorage.getItem("debatel_users")).map(normalizeStoredUser);
+  console.log(`📊 Leaderboard: Found ${users.length} users in storage`);
 
   const deduped = new Map<string, StoredUser>();
   users.forEach((user) => {
@@ -109,10 +110,14 @@ const getLeaderboardSnapshot = (): { rows: LeaderboardRow[]; session: StoredUser
       };
     }
     window.localStorage.setItem("debatel_users", JSON.stringify(users));
+    console.log(`📊 Leaderboard: Saved ${users.length} users back to storage`);
   }
 
+  const rows = computeLeaderboardRows(users);
+  console.log(`📊 Leaderboard: Displaying ${rows.length} ranked players`);
+  
   return {
-    rows: computeLeaderboardRows(users),
+    rows,
     session: sessionUser
   };
 };

@@ -77,11 +77,13 @@ EVALUATION CRITERIA:
 
 BE CRITICAL and THOROUGH. Do not award high scores unless truly earned. Look for logical fallacies, weak evidence, and poor argumentation. A score of 70+ should indicate excellent debate performance.
 
+CRITICAL: There MUST be a winner. Ties are NOT allowed. Even if the debate is close, you must determine which side performed better overall and declare them the winner.
+
 Respond ONLY with a JSON object in this exact format:
 {
   "playerScore": <number 0-100>,
   "opponentScore": <number 0-100>,
-  "winner": "player" or "opponent" or "tie",
+  "winner": "player" or "opponent" (NO TIES ALLOWED),
   "reasoning": "<brief explanation of decision>",
   "playerBreakdown": {
     "argumentQuality": <0-30>,

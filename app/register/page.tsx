@@ -83,6 +83,7 @@ export default function Register() {
 
       users.push(newUser);
       localStorage.setItem("debatel_users", JSON.stringify(users));
+      console.log(`✅ Registered new user: ${newUser.username} (Total users: ${users.length})`);
 
       // Store logged-in user
       localStorage.setItem("debatel_user", JSON.stringify({
@@ -98,6 +99,7 @@ export default function Register() {
       // Trigger storage event for navbar update
       window.dispatchEvent(new Event("storage"));
       window.dispatchEvent(new Event("debatelUsersUpdated"));
+      console.log("✅ Dispatched debatelUsersUpdated event after registration");
 
       // Redirect to lobby
       router.push("/lobby");

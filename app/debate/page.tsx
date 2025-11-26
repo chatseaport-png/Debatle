@@ -441,6 +441,8 @@ function DebateRoom() {
   }, [timeLeft, debateEnded, isAnalyzing, isReadingBreak, isMultiplayer, goesFirst, position, timePerTurn, nextTurn, pendingDebateEnd, generateOpponentResponse]);
 
   const handleTimeUp = () => {
+    if (hasSubmitted) return; // Already submitted, don't timeout again
+    
     const timedOutSpeaker = isYourTurn ? "player" : "opponent";
     const timeoutMsg = {
       sender: isYourTurn ? "You" : "Opponent",
@@ -456,6 +458,7 @@ function DebateRoom() {
       setOpponentScore(prev => Math.max(0, prev - 10));
     }
 
+    setHasSubmitted(true); // Mark as submitted to prevent re-timing out
     completeTurn(timedOutSpeaker);
   };
 

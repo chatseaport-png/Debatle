@@ -107,6 +107,7 @@ export default function Login() {
           };
           localStorage.setItem("debatel_users", JSON.stringify(users));
           window.dispatchEvent(new Event("debatelUsersUpdated"));
+          console.log(`✅ Migrated user data for: ${user.username}`);
         }
       }
 
@@ -122,8 +123,9 @@ export default function Login() {
       }));
 
       // Trigger storage event for navbar update
-  window.dispatchEvent(new Event("storage"));
-  window.dispatchEvent(new Event("debatelUsersUpdated"));
+      window.dispatchEvent(new Event("storage"));
+      window.dispatchEvent(new Event("debatelUsersUpdated"));
+      console.log(`✅ User logged in: ${user.username} (Total users in system: ${users.length})`);
 
       // Redirect to lobby
       router.push("/lobby");
