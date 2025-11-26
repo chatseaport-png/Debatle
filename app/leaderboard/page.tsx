@@ -19,10 +19,9 @@ export default function Leaderboard() {
     
     if (storedUsers) {
       const users = JSON.parse(storedUsers);
-      // Sort by ELO descending, take top 1000
+      // Sort by ELO descending, show ALL users (not just top 1000)
       const sortedUsers = users
         .sort((a: any, b: any) => (b.elo || 0) - (a.elo || 0))
-        .slice(0, 1000)
         .map((user: any, index: number) => ({
           rank: index + 1,
           username: user.username,
@@ -58,28 +57,28 @@ export default function Leaderboard() {
 
       <main className="mx-auto max-w-6xl px-4 py-12">
         {/* Rank Tiers */}
-        <div className="mb-8 border border-gray-200 bg-white p-6">
-          <h2 className="mb-4 text-2xl font-bold text-black">Rank Tiers</h2>
-          <div className="mb-4 rounded bg-gray-50 p-4 text-sm text-gray-600">
-            Each rank has 3 sub-ranks (1, 2, 3). Each sub-rank requires 100 ELO. Gain 30 ELO per win.
+        <div className="mb-8 border-2 border-black bg-white p-8">
+          <h2 className="mb-6 text-3xl font-bold text-black">Rank Tiers</h2>
+          <div className="mb-6 rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm text-gray-700">
+            <strong>How it works:</strong> Each rank has 3 sub-ranks (1, 2, 3). Each sub-rank requires 100 ELO. Gain 30-45 ELO per win based on performance.
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
             {ranks.map((rank) => (
               <div
                 key={rank.name}
-                className="rounded border-2 p-4 transition hover:border-gray-400"
-                style={{ borderColor: rank.bgColor, backgroundColor: `${rank.bgColor}15` }}
+                className="flex flex-col items-center justify-center rounded-lg border-2 p-4 transition-all hover:scale-105 hover:shadow-lg"
+                style={{ 
+                  borderColor: rank.bgColor, 
+                  backgroundColor: 'white',
+                  boxShadow: `0 0 0 0 ${rank.bgColor}40`
+                }}
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-3xl">{rank.icon}</span>
-                  <div className="font-bold text-lg" style={{ color: rank.bgColor }}>
-                    {rank.name}
-                  </div>
+                <span className="text-4xl mb-2">{rank.icon}</span>
+                <div className="font-bold text-sm text-center mb-1" style={{ color: rank.bgColor }}>
+                  {rank.name}
                 </div>
-                <div className="text-xs text-gray-600 space-y-1">
-                  <div>{rank.name} 1: {rank.minElo}-{rank.minElo + 99} ELO</div>
-                  <div>{rank.name} 2: {rank.minElo + 100}-{rank.minElo + 199} ELO</div>
-                  <div>{rank.name} 3: {rank.minElo + 200}-{rank.maxElo === Infinity ? '∞' : rank.maxElo} ELO</div>
+                <div className="text-xs text-gray-500 text-center">
+                  {rank.minElo}-{rank.maxElo === Infinity ? '∞' : rank.maxElo}
                 </div>
               </div>
             ))}
@@ -88,7 +87,7 @@ export default function Leaderboard() {
 
         <div className="mb-12 border-b border-gray-200 pb-8">
           <h1 className="text-5xl font-bold text-black">Global Rankings</h1>
-          <p className="mt-3 text-gray-600">Top 1000 debaters by ELO rating</p>
+          <p className="mt-3 text-gray-600">All registered debaters by ELO rating</p>
         </div>
 
         <div className="border border-gray-200 bg-white">

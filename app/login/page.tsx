@@ -9,7 +9,26 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showForgotUsername, setShowForgotUsername] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotMessage, setForgotMessage] = useState("");
   const router = useRouter();
+
+  const handleForgotUsername = (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotMessage("");
+
+    const storedUsers = localStorage.getItem("debatel_users");
+    const users = storedUsers ? JSON.parse(storedUsers) : [];
+
+    const user = users.find((u: any) => u.email === forgotEmail);
+
+    if (user) {
+      setForgotMessage(`Your username is: ${user.username}`);
+    } else {
+      setForgotMessage("No account found with this email address");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,6 +109,65 @@ export default function Login() {
         </div>
       </nav>
 
+      {/* Forgot Username Modal */}
+      {showForgotUsername && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
+          <div className="w-full max-w-md border-2 border-black bg-white p-8">
+            <h3 className="mb-4 text-2xl font-bold text-black">Forgot Username</h3>
+            <p className="mb-6 text-sm text-gray-600">
+              Enter your email address and we'll show you your username.
+            </p>
+            
+            {forgotMessage && (
+              <div className={`mb-4 border-2 px-4 py-3 ${
+                forgotMessage.includes("No account") 
+                  ? "border-red-500 bg-red-50 text-red-700"
+                  : "border-green-500 bg-green-50 text-green-700"
+              }`}>
+                {forgotMessage}
+              </div>
+            )}
+
+            <form onSubmit={handleForgotUsername} className="space-y-4">
+              <div>
+                <label htmlFor="forgotEmail" className="block text-sm font-bold uppercase tracking-wide text-black">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  id="forgotEmail"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  className="mt-2 w-full border-2 border-gray-300 px-4 py-3 text-black focus:border-black focus:outline-none"
+                  placeholder="your.email@example.com"
+                  required
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  className="flex-1 bg-black py-3 font-bold uppercase tracking-wide text-white transition hover:bg-gray-800"
+                >
+                  Find Username
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgotUsername(false);
+                    setForgotMessage("");
+                    setForgotEmail("");
+                  }}
+                  className="flex-1 border-2 border-black bg-white py-3 font-bold uppercase tracking-wide text-black transition hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
           <div className="mb-12 text-center">
@@ -134,6 +212,16 @@ export default function Login() {
                   required
                   disabled={loading}
                 />
+              </div>
+
+              <div className="text-right">
+                <button
+                  type="button"
+                  onClick={() => setShowForgotUsername(true)}
+                  className="text-sm font-semibold text-black hover:underline"
+                >
+                  Forgot Username?
+                </button>
               </div>
 
               <button
