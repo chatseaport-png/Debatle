@@ -463,6 +463,38 @@ function DebateRoom() {
   };
 
   const beginReadingBreak = (upNext: "player" | "opponent" | null) => {
+    if (READING_DURATION === 0) {
+      // Skip reading break entirely if duration is 0
+      if (upNext === null) {
+        setPendingDebateEnd(true);
+        endDebate();
+        return;
+      }
+      
+      if (upNext === "player") {
+        setIsYourTurn(true);
+        setHasSubmitted(false);
+        setTimeLeft(timePerTurn);
+      } else if (upNext === "opponent") {
+        setIsYourTurn(false);
+        setHasSubmitted(true);
+        setTimeLeft(timePerTurn);
+        if (!isMultiplayer) {
+          if (opponentResponseTimeout.current) {
+            clearTimeout(opponentResponseTimeout.current);
+          }
+          const minDelay = 5;
+          const maxDelay = Math.max(minDelay + 1, timePerTurn - 5);
+          const delaySeconds = Math.floor(Math.random() * (maxDelay - minDelay)) + minDelay;
+          opponentResponseTimeout.current = setTimeout(() => {
+            generateOpponentResponse();
+            opponentResponseTimeout.current = null;
+          }, delaySeconds * 1000);
+        }
+      }
+      return;
+    }
+
     setIsReadingBreak(true);
     setNextTurn(upNext);
     setTimeLeft(READING_DURATION);

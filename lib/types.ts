@@ -35,4 +35,5 @@ export interface StoredUser {
   profileBanner?: string;
   icon?: string;
   banner?: string;
+  createdAt?: string;
 }

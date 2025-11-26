@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ranks, getRankByElo } from "@/lib/rankSystem";
 import { StoredUser } from "@/lib/types";
+import { ensureSeedUsers, initializeSeedUsers } from "@/lib/seedUsers";
 
 interface LeaderboardRow {
   rank: number;
@@ -23,16 +24,17 @@ const parseStoredUser = (rawValue: string | null): StoredUser | null => {
   }
 };
 
-const parseStoredUsers = (rawValue: string | null): StoredUser[] => {
-  if (!rawValue) return [];
-  try {
-    const parsed = JSON.parse(rawValue) as StoredUser[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("Failed to parse stored users", error);
-    return [];
-  }
-};
+// No longer needed - using ensureSeedUsers instead
+// const parseStoredUsers = (rawValue: string | null): StoredUser[] => {
+//   if (!rawValue) return [];
+//   try {
+//     const parsed = JSON.parse(rawValue) as StoredUser[];
+//     return Array.isArray(parsed) ? parsed : [];
+//   } catch (error) {
+//     console.error("Failed to parse stored users", error);
+//     return [];
+//   }
+// };
 
 const safeNumber = (value: unknown): number => {
   const numeric = Number(value);
@@ -71,10 +73,15 @@ const getLeaderboardSnapshot = (): { rows: LeaderboardRow[]; session: StoredUser
     return { rows: [], session: null };
   }
 
+  // Initialize seed users if needed
+  initializeSeedUsers();
+
   const sessionUserRaw = parseStoredUser(window.localStorage.getItem("debatel_user"));
   const sessionUser = sessionUserRaw ? normalizeStoredUser(sessionUserRaw) : null;
-  let users = parseStoredUsers(window.localStorage.getItem("debatel_users")).map(normalizeStoredUser);
-  console.log(`📊 Leaderboard: Found ${users.length} users in storage`);
+  
+  // Get all users including seed users
+  let users = ensureSeedUsers().map(normalizeStoredUser);
+  console.log(`📊 Leaderboard: Found ${users.length} users (including seed users)`);
 
   const deduped = new Map<string, StoredUser>();
   users.forEach((user) => {
