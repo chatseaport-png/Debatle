@@ -133,6 +133,52 @@ export default function Leaderboard() {
       setLeaderboardData(computeLeaderboardRows(mergedUsers));
     };
 
+    const syncLocalUsers = async (): Promise<StoredUser[] | null> => {
+      const cachedRaw = window.localStorage.getItem("debatel_users");
+      let cachedUsers: StoredUser[] = [];
+      if (cachedRaw) {
+        try {
+          cachedUsers = JSON.parse(cachedRaw) as StoredUser[];
+        } catch (parseError) {
+          console.error("Failed to parse cached users for sync", parseError);
+        }
+      }
+
+      const payloadUsers = dedupeUsers([
+        ...cachedUsers,
+        ...(sessionUser ? [sessionUser] : [])
+      ]);
+
+      if (payloadUsers.length === 0) {
+        return null;
+      }
+
+      const response = await fetch("/api/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ users: payloadUsers })
+      });
+
+      const payload = await response.json().catch(() => ({ message: "Failed to sync users" }));
+      if (!response.ok) {
+        throw new Error(payload.message ?? "Failed to sync users");
+      }
+
+      const syncedUsers = (payload.users as StoredUser[] | undefined) ?? [];
+      if (syncedUsers.length > 0) {
+        window.localStorage.setItem("debatel_users", JSON.stringify(syncedUsers));
+      }
+      return syncedUsers;
+    };
+
+    let lastSyncedUsers: StoredUser[] | null = null;
+
+    try {
+      lastSyncedUsers = await syncLocalUsers();
+    } catch (syncError) {
+      console.error("User sync failed", syncError);
+    }
+
     try {
       const response = await fetch("/api/users", { cache: "no-store" });
       const payload = await response.json().catch(() => ({ message: "Failed to load leaderboard" }));
@@ -148,16 +194,20 @@ export default function Leaderboard() {
     } catch (err) {
       console.error("Failed to fetch leaderboard", err);
       setError("Unable to reach server. Showing cached data.");
-      const cachedRaw = window.localStorage.getItem("debatel_users");
-      let cachedUsers: StoredUser[] = [];
-      if (cachedRaw) {
-        try {
-          cachedUsers = JSON.parse(cachedRaw) as StoredUser[];
-        } catch (parseError) {
-          console.error("Failed to parse cached users", parseError);
+      if (lastSyncedUsers && lastSyncedUsers.length > 0) {
+        applyUsers(lastSyncedUsers);
+      } else {
+        const cachedRaw = window.localStorage.getItem("debatel_users");
+        let cachedUsers: StoredUser[] = [];
+        if (cachedRaw) {
+          try {
+            cachedUsers = JSON.parse(cachedRaw) as StoredUser[];
+          } catch (parseError) {
+            console.error("Failed to parse cached users", parseError);
+          }
         }
+        applyUsers(cachedUsers);
       }
-      applyUsers(cachedUsers);
     } finally {
       setIsLoading(false);
     }

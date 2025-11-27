@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { addUser, getUsers, updateUser, sanitizeUser, SanitizedUser } from "@/lib/server/userStore";
+import { addUser, getUsers, updateUser, sanitizeUser, SanitizedUser, mergeUsers } from "@/lib/server/userStore";
 import { StoredUser } from "@/lib/types";
 
 type UsersResponse = {
@@ -113,5 +113,18 @@ export async function PATCH(request: Request) {
   } catch (error) {
     console.error("Failed to update user", error);
     return NextResponse.json({ message: "Failed to update user" }, { status: 500 });
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const payload = await request.json().catch(() => null);
+    const incoming = Array.isArray(payload?.users) ? (payload.users as StoredUser[]) : [];
+    const mergedUsers = await mergeUsers(incoming);
+    const message = incoming.length === 0 ? "No users provided" : "Users synced";
+    return NextResponse.json(buildUsersResponse(mergedUsers, undefined, message));
+  } catch (error) {
+    console.error("Failed to merge users", error);
+    return NextResponse.json({ message: "Failed to merge users" }, { status: 500 });
   }
 }
