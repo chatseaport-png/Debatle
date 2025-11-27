@@ -446,17 +446,18 @@ function DebateRoom() {
     const timedOutSpeaker = isYourTurn ? "player" : "opponent";
     const timeoutMsg = {
       sender: isYourTurn ? "You" : "Opponent",
-      text: "⏳ No submission received.",
+      text: "⏳ No submission received. Passing turn...",
       time: timePerTurn,
       isYourTurn
     };
     setMessages(prev => [...prev, timeoutMsg]);
 
-    if (isYourTurn) {
-      setYourScore(prev => Math.max(0, prev - 10));
-    } else {
-      setOpponentScore(prev => Math.max(0, prev - 10));
-    }
+    // Don't penalize anyone for timeout - just pass the turn
+    // if (isYourTurn) {
+    //   setYourScore(prev => Math.max(0, prev - 10));
+    // } else {
+    //   setOpponentScore(prev => Math.max(0, prev - 10));
+    // }
 
     setHasSubmitted(true); // Mark as submitted to prevent re-timing out
     completeTurn(timedOutSpeaker);
