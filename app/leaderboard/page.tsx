@@ -3,7 +3,6 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ranks, getRankByElo } from "@/lib/rankSystem";
 import { StoredUser } from "@/lib/types";
-import { ensureSeedUsers, initializeSeedUsers } from "@/lib/seedUsers";
 
 interface LeaderboardRow {
   rank: number;
@@ -73,15 +72,23 @@ const getLeaderboardSnapshot = (): { rows: LeaderboardRow[]; session: StoredUser
     return { rows: [], session: null };
   }
 
-  // Initialize seed users if needed
-  initializeSeedUsers();
-
   const sessionUserRaw = parseStoredUser(window.localStorage.getItem("debatel_user"));
   const sessionUser = sessionUserRaw ? normalizeStoredUser(sessionUserRaw) : null;
   
-  // Get all users including seed users
-  let users = ensureSeedUsers().map(normalizeStoredUser);
-  console.log(`📊 Leaderboard: Found ${users.length} users (including seed users)`);
+  // Get all registered users from localStorage
+  const storedUsersRaw = window.localStorage.getItem("debatel_users");
+  let users: StoredUser[] = [];
+  
+  try {
+    if (storedUsersRaw) {
+      users = (JSON.parse(storedUsersRaw) as StoredUser[]).map(normalizeStoredUser);
+    }
+  } catch (error) {
+    console.error("Failed to parse stored users", error);
+    users = [];
+  }
+  
+  console.log(`📊 Leaderboard: Found ${users.length} registered users`);
 
   const deduped = new Map<string, StoredUser>();
   users.forEach((user) => {

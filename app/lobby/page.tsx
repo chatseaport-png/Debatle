@@ -103,11 +103,11 @@ export default function Lobby() {
         }
 
         setUsername(sessionUser.username);
-        setUserElo(sessionUser.elo);
-        setProfileIcon(sessionUser.profileIcon);
-        setProfileBanner(sessionUser.profileBanner);
-        setRankedWins(sessionUser.rankedWins);
-        setRankedLosses(sessionUser.rankedLosses);
+        setUserElo(sessionUser.elo ?? 0);
+        setProfileIcon(sessionUser.profileIcon ?? "👤");
+        setProfileBanner(sessionUser.profileBanner ?? "#3b82f6");
+        setRankedWins(sessionUser.rankedWins ?? 0);
+        setRankedLosses(sessionUser.rankedLosses ?? 0);
         setIsLoggedIn(true);
       } else {
         setIsLoggedIn(false);
