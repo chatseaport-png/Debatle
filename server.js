@@ -185,6 +185,56 @@ app.prepare().then(() => {
       });
     });
 
+    socket.on('turn-timeout', ({ matchId }) => {
+      const match = activeMatches.get(matchId);
+      if (!match) return;
+
+      if (match.currentTurn !== socket.id) {
+        socket.emit('error', { message: 'Not your turn' });
+        return;
+      }
+
+      if (match.messagesPlayed >= match.totalRounds * 2) {
+        socket.emit('error', { message: 'Debate already completed' });
+        return;
+      }
+
+      match.messages.push({
+        sender: socket.id,
+        text: '',
+        time: 0,
+        timeout: true
+      });
+
+      match.messagesPlayed = (match.messagesPlayed || 0) + 1;
+      const totalRounds = match.totalRounds || TOTAL_ROUNDS;
+      const currentRound = Math.min(totalRounds, Math.ceil(match.messagesPlayed / 2));
+      const roundCompleted = match.messagesPlayed % 2 === 0;
+      const debateComplete = roundCompleted && currentRound >= totalRounds;
+
+      match.currentTurn = socket.id === match.player1.id ? match.player2.id : match.player1.id;
+
+      io.to(matchId).emit('turn-timeout', {
+        senderId: socket.id,
+        round: currentRound,
+        roundCompleted,
+        totalRounds
+      });
+
+      if (debateComplete) {
+        io.to(matchId).emit('debate-ended');
+        activeMatches.delete(matchId);
+        console.log(`Match completed via timeout: ${matchId}`);
+        return;
+      }
+
+      io.to(matchId).emit('turn-change', {
+        currentTurn: match.currentTurn,
+        round: roundCompleted ? Math.min(currentRound + 1, totalRounds) : currentRound,
+        roundCompleted
+      });
+    });
+
     // End debate
     socket.on('end-debate', ({ matchId, forfeit = false } = {}) => {
       const match = activeMatches.get(matchId);

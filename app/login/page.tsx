@@ -15,27 +15,38 @@ export default function Login() {
   const [forgotMessage, setForgotMessage] = useState("");
   const router = useRouter();
 
-  const handleForgotUsername = (e: React.FormEvent) => {
+  const handleForgotUsername = async (e: React.FormEvent) => {
     e.preventDefault();
     setForgotMessage("");
 
-    const storedUsers = localStorage.getItem("debatel_users");
-    let users: StoredUser[] = [];
-    if (storedUsers) {
-      try {
-        users = JSON.parse(storedUsers) as StoredUser[];
-      } catch (error) {
-        console.error("Failed to parse stored users", error);
-      }
-    }
     const normalizedEmail = forgotEmail.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setForgotMessage("Please enter a valid email address");
+      return;
+    }
 
-    const user = users.find((u) => (u.email ?? "").toLowerCase() === normalizedEmail);
+    try {
+      const response = await fetch("/api/users/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail })
+      });
 
-    if (user) {
-      setForgotMessage(`Your username is: ${user.username}`);
-    } else {
-      setForgotMessage("No account found with this email address");
+      const payload = await response.json().catch(() => ({ message: "Unable to find account" }));
+      if (!response.ok) {
+        setForgotMessage(payload.message ?? "No account found with this email address");
+        return;
+      }
+
+      const user = payload.user as StoredUser | undefined;
+      if (user?.username) {
+        setForgotMessage(`Your username is: ${user.username}`);
+      } else {
+        setForgotMessage("No account found with this email address");
+      }
+    } catch (error) {
+      console.error("Failed to lookup username", error);
+      setForgotMessage("Unable to lookup username. Please try again later.");
     }
   };
 
@@ -48,86 +59,45 @@ export default function Login() {
     const normalizedIdentifierLower = normalizedIdentifier.toLowerCase();
 
     try {
-      // Get stored users from localStorage
-      const storedUsers = localStorage.getItem("debatel_users");
-      let users: StoredUser[] = [];
-      if (storedUsers) {
-        try {
-          users = JSON.parse(storedUsers) as StoredUser[];
-        } catch (error) {
-          console.error("Failed to parse stored users", error);
-        }
+      const response = await fetch("/api/users/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: normalizedIdentifierLower, password })
+      });
+
+      const payload = await response.json().catch(() => ({ message: "Login failed" }));
+      if (!response.ok) {
+        setError(payload.message ?? "Invalid credentials");
+        setLoading(false);
+        return;
       }
 
-      // Find user with matching email OR username
-      const user = users.find((u) => 
-        (u.email ?? "").toLowerCase() === normalizedIdentifierLower ||
-        (u.username ?? "").toLowerCase() === normalizedIdentifierLower
-      );
+      const user = payload.user as StoredUser | undefined;
+      const users = (payload.users as StoredUser[] | undefined) ?? [];
+
+      if (users.length > 0) {
+        localStorage.setItem("debatel_users", JSON.stringify(users));
+      }
 
       if (!user) {
-        setError("No account found with this username or email");
+        setError("Unable to load user profile");
         setLoading(false);
         return;
       }
 
-      if (user.password !== password) {
-        setError("Incorrect password");
-        setLoading(false);
-        return;
-      }
-
-      // Migrate old users without elo/icon/banner and update in storage
-  const migratedElo = user.elo ?? 0;
-  const migratedIcon = user.profileIcon ?? "👤";
-  const migratedBanner = user.profileBanner ?? "#3b82f6";
-  const migratedWins = user.rankedWins ?? 0;
-  const migratedLosses = user.rankedLosses ?? 0;
-
-      // Update the user in the users array if migration happened
-      if (
-        user.elo === undefined ||
-        !user.profileIcon ||
-        !user.profileBanner ||
-        user.rankedWins === undefined ||
-        user.rankedLosses === undefined
-      ) {
-        const userIndex = users.findIndex((u) => 
-          (u.username ?? "").toLowerCase() === normalizedIdentifierLower ||
-          (u.email ?? "").toLowerCase() === normalizedIdentifierLower
-        );
-        if (userIndex !== -1) {
-          users[userIndex] = {
-            ...users[userIndex],
-            elo: migratedElo,
-            profileIcon: migratedIcon,
-            profileBanner: migratedBanner,
-            rankedWins: migratedWins,
-            rankedLosses: migratedLosses
-          };
-          localStorage.setItem("debatel_users", JSON.stringify(users));
-          window.dispatchEvent(new Event("debatelUsersUpdated"));
-          console.log(`✅ Migrated user data for: ${user.username}`);
-        }
-      }
-
-      // Store logged-in user session
-      localStorage.setItem("debatel_user", JSON.stringify({
+      const sessionUser: StoredUser = {
         username: user.username,
         email: user.email,
-        elo: migratedElo,
-        profileIcon: migratedIcon,
-        profileBanner: migratedBanner,
-        rankedWins: migratedWins,
-        rankedLosses: migratedLosses
-      }));
+        elo: user.elo ?? 0,
+        profileIcon: user.profileIcon ?? "👤",
+        profileBanner: user.profileBanner ?? "#3b82f6",
+        rankedWins: user.rankedWins ?? 0,
+        rankedLosses: user.rankedLosses ?? 0
+      };
 
-      // Trigger storage event for navbar update
+      localStorage.setItem("debatel_user", JSON.stringify(sessionUser));
       window.dispatchEvent(new Event("storage"));
       window.dispatchEvent(new Event("debatelUsersUpdated"));
-      console.log(`✅ User logged in: ${user.username} (Total users in system: ${users.length})`);
-
-      // Redirect to lobby
       router.push("/lobby");
     } catch {
       setError("An error occurred. Please try again.");

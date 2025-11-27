@@ -31,17 +31,6 @@ const parseStoredUser = (rawValue: string | null): StoredUser | null => {
   }
 };
 
-const parseStoredUsers = (rawValue: string | null): StoredUser[] => {
-  if (!rawValue) return [];
-  try {
-    const parsed = JSON.parse(rawValue) as StoredUser[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("Failed to parse stored users", error);
-    return [];
-  }
-};
-
 export default function Profile() {
   const router = useRouter();
   const initialUser = typeof window === "undefined" ? null : parseStoredUser(window.localStorage.getItem("debatel_user"));
@@ -105,10 +94,9 @@ export default function Profile() {
     return () => window.clearTimeout(timeoutId);
   }, [showEloChange]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setLoading(true);
     
-    // Update current user session
     if (!user) {
       setLoading(false);
       return;
@@ -119,25 +107,37 @@ export default function Profile() {
       profileIcon: selectedIcon,
       profileBanner: selectedBanner,
     };
+
     localStorage.setItem("debatel_user", JSON.stringify(updatedUser));
 
-    // Update in users list
-    const storedUsers = parseStoredUsers(localStorage.getItem("debatel_users"));
-    if (storedUsers.length > 0) {
-      const userIndex = storedUsers.findIndex((u) => u.username === user.username);
-      if (userIndex !== -1) {
-        storedUsers[userIndex] = {
-          ...storedUsers[userIndex],
-          profileIcon: selectedIcon,
-          profileBanner: selectedBanner,
-        };
-        localStorage.setItem("debatel_users", JSON.stringify(storedUsers));
+    try {
+      const response = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: updatedUser.username,
+          profileIcon: updatedUser.profileIcon,
+          profileBanner: updatedUser.profileBanner
+        })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok) {
+        const serverUsers = (payload.users as StoredUser[] | undefined) ?? [];
+        if (serverUsers.length > 0) {
+          localStorage.setItem("debatel_users", JSON.stringify(serverUsers));
+        }
+      } else {
+        console.error("Failed to update profile", payload);
       }
+    } catch (error) {
+      console.error("Profile update failed", error);
     }
 
     setUser(updatedUser);
     setSuccess(true);
     setLoading(false);
+    window.dispatchEvent(new Event("storage"));
     window.dispatchEvent(new Event("debatelUsersUpdated"));
     
     setTimeout(() => setSuccess(false), 3000);

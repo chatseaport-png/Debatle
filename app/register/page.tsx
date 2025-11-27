@@ -19,9 +19,8 @@ export default function Register() {
     setError("");
     setLoading(true);
 
-    const normalizedUsername = username.trim();
-    const normalizedEmail = email.trim().toLowerCase();
-    const normalizedUsernameLower = normalizedUsername.toLowerCase();
+  const normalizedUsername = username.trim();
+  const normalizedEmail = email.trim().toLowerCase();
 
     // Validation
     if (password !== confirmPassword) {
@@ -43,67 +42,52 @@ export default function Register() {
     }
 
     try {
-      // Get existing users from localStorage
-      const storedUsers = localStorage.getItem("debatel_users");
-      let users: StoredUser[] = [];
-      if (storedUsers) {
-        try {
-          users = JSON.parse(storedUsers) as StoredUser[];
-        } catch (error) {
-          console.error("Failed to parse stored users", error);
-        }
-      }
+      const response = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: normalizedUsername,
+          email: normalizedEmail,
+          password,
+          elo: 0,
+          rankedWins: 0,
+          rankedLosses: 0,
+          profileIcon: "👤",
+          profileBanner: "#3b82f6"
+        })
+      });
 
-      // Check if email already exists
-      if (users.some((u) => (u.email ?? "").toLowerCase() === normalizedEmail)) {
-        setError("An account with this email already exists");
+      const payload = await response.json().catch(() => ({ message: "Failed to create account" }));
+      if (!response.ok) {
+        setError(payload.message ?? "Failed to create account");
         setLoading(false);
         return;
       }
 
-      // Check if username already exists
-      if (users.some((u) => (u.username ?? "").toLowerCase() === normalizedUsernameLower)) {
-        setError("This username is already taken");
-        setLoading(false);
-        return;
+      const createdUser = payload.user as StoredUser | undefined;
+      const allUsers = (payload.users as StoredUser[] | undefined) ?? [];
+
+      if (allUsers.length > 0) {
+        localStorage.setItem("debatel_users", JSON.stringify(allUsers));
       }
 
-      // Add new user
-      const newUser = {
-        username: normalizedUsername,
-        email: normalizedEmail,
-        password, // In production, this should be hashed
-        createdAt: new Date().toISOString(),
-        elo: 0, // Starting ELO
-        profileIcon: "👤", // Default icon
-        profileBanner: "#3b82f6", // Default banner color (blue)
-        rankedWins: 0,
-        rankedLosses: 0
-      };
+      if (createdUser) {
+        localStorage.setItem("debatel_user", JSON.stringify({
+          username: createdUser.username,
+          email: createdUser.email,
+          elo: createdUser.elo ?? 0,
+          profileIcon: createdUser.profileIcon ?? "👤",
+          profileBanner: createdUser.profileBanner ?? "#3b82f6",
+          rankedWins: createdUser.rankedWins ?? 0,
+          rankedLosses: createdUser.rankedLosses ?? 0
+        }));
+      }
 
-      users.push(newUser);
-      localStorage.setItem("debatel_users", JSON.stringify(users));
-      console.log(`✅ Registered new user: ${newUser.username} (Total users: ${users.length})`);
-
-      // Store logged-in user
-      localStorage.setItem("debatel_user", JSON.stringify({
-        username: newUser.username,
-        email: newUser.email,
-        elo: newUser.elo,
-        profileIcon: newUser.profileIcon,
-        profileBanner: newUser.profileBanner,
-        rankedWins: newUser.rankedWins,
-        rankedLosses: newUser.rankedLosses
-      }));
-
-      // Trigger storage event for navbar update
       window.dispatchEvent(new Event("storage"));
       window.dispatchEvent(new Event("debatelUsersUpdated"));
-      console.log("✅ Dispatched debatelUsersUpdated event after registration");
-
-      // Redirect to lobby
       router.push("/lobby");
-    } catch {
+    } catch (err) {
+      console.error("Registration failed", err);
       setError("An error occurred. Please try again.");
       setLoading(false);
     }

@@ -5,6 +5,7 @@ export interface DebateMessage {
   text: string;
   time: number;
   isYourTurn: boolean;
+  wasTimeout?: boolean;
 }
 
 export interface JudgementBreakdown {

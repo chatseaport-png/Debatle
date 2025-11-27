@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ranks, getRankByElo } from "@/lib/rankSystem";
 import { StoredUser } from "@/lib/types";
 
@@ -66,86 +66,106 @@ const computeLeaderboardRows = (users: StoredUser[]): LeaderboardRow[] =>
       ...entry,
       rank: index + 1
     }));
-
-const getLeaderboardSnapshot = (): { rows: LeaderboardRow[]; session: StoredUser | null } => {
-  if (typeof window === "undefined") {
-    return { rows: [], session: null };
-  }
-
-  const sessionUserRaw = parseStoredUser(window.localStorage.getItem("debatel_user"));
-  const sessionUser = sessionUserRaw ? normalizeStoredUser(sessionUserRaw) : null;
-  
-  // Get all registered users from localStorage
-  const storedUsersRaw = window.localStorage.getItem("debatel_users");
-  let users: StoredUser[] = [];
-  
-  try {
-    if (storedUsersRaw) {
-      users = (JSON.parse(storedUsersRaw) as StoredUser[]).map(normalizeStoredUser);
-    }
-  } catch (error) {
-    console.error("Failed to parse stored users", error);
-    users = [];
-  }
-  
-  console.log(`📊 Leaderboard: Found ${users.length} registered users`);
-
+const dedupeUsers = (users: StoredUser[]): StoredUser[] => {
   const deduped = new Map<string, StoredUser>();
   users.forEach((user) => {
     if (!user.username) return;
-    const existing = deduped.get(user.username);
-    if (existing) {
-      deduped.set(user.username, {
-        ...existing,
-        ...user,
-        elo: user.elo ?? existing.elo ?? 0,
-        rankedWins: user.rankedWins ?? existing.rankedWins ?? 0,
-        rankedLosses: user.rankedLosses ?? existing.rankedLosses ?? 0
-      });
-    } else {
-      deduped.set(user.username, user);
-    }
+    const key = user.username.toLowerCase();
+    const existing = deduped.get(key);
+    const merged = existing
+      ? {
+          ...existing,
+          ...user,
+          elo: user.elo ?? existing.elo ?? 0,
+          rankedWins: user.rankedWins ?? existing.rankedWins ?? 0,
+          rankedLosses: user.rankedLosses ?? existing.rankedLosses ?? 0,
+          profileIcon: user.profileIcon ?? existing.profileIcon,
+          profileBanner: user.profileBanner ?? existing.profileBanner
+        }
+      : user;
+    deduped.set(key, normalizeStoredUser(merged));
   });
+  return Array.from(deduped.values());
+};
 
-  users = Array.from(deduped.values());
-
-  if (sessionUser) {
-    const userIndex = users.findIndex((user) => user.username === sessionUser.username);
-    if (userIndex === -1) {
-      users = [...users, sessionUser];
-    } else {
-      users[userIndex] = {
-        ...users[userIndex],
-        elo: sessionUser.elo ?? users[userIndex].elo ?? 0,
-        rankedWins: sessionUser.rankedWins ?? users[userIndex].rankedWins ?? 0,
-        rankedLosses: sessionUser.rankedLosses ?? users[userIndex].rankedLosses ?? 0,
-        profileIcon: sessionUser.profileIcon ?? users[userIndex].profileIcon,
-        profileBanner: sessionUser.profileBanner ?? users[userIndex].profileBanner
-      };
-    }
-    window.localStorage.setItem("debatel_users", JSON.stringify(users));
-    console.log(`📊 Leaderboard: Saved ${users.length} users back to storage`);
+const mergeWithSessionUser = (users: StoredUser[], sessionUser: StoredUser | null): StoredUser[] => {
+  const deduped = dedupeUsers(users);
+  if (!sessionUser?.username) {
+    return deduped;
   }
 
-  const rows = computeLeaderboardRows(users);
-  console.log(`📊 Leaderboard: Displaying ${rows.length} ranked players`);
-  
-  return {
-    rows,
-    session: sessionUser
-  };
+  const index = deduped.findIndex((candidate) => candidate.username === sessionUser.username);
+  if (index === -1) {
+    return [...deduped, normalizeStoredUser(sessionUser)];
+  }
+
+  const updated = [...deduped];
+  updated[index] = normalizeStoredUser({
+    ...updated[index],
+    ...sessionUser,
+    elo: sessionUser.elo ?? updated[index].elo,
+    rankedWins: sessionUser.rankedWins ?? updated[index].rankedWins,
+    rankedLosses: sessionUser.rankedLosses ?? updated[index].rankedLosses,
+    profileIcon: sessionUser.profileIcon ?? updated[index].profileIcon,
+    profileBanner: sessionUser.profileBanner ?? updated[index].profileBanner
+  });
+  return updated;
 };
 
 export default function Leaderboard() {
-  const initialSnapshot = useMemo(() => getLeaderboardSnapshot(), []);
-  const [leaderboardData, setLeaderboardData] = useState<LeaderboardRow[]>(initialSnapshot.rows);
-  const [currentUser, setCurrentUser] = useState<StoredUser | null>(initialSnapshot.session);
+  const [leaderboardData, setLeaderboardData] = useState<LeaderboardRow[]>([]);
+  const [currentUser, setCurrentUser] = useState<StoredUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const refreshLeaderboard = useCallback(() => {
-    const snapshot = getLeaderboardSnapshot();
-    setLeaderboardData(snapshot.rows);
-    setCurrentUser(snapshot.session);
+  const refreshLeaderboard = useCallback(async () => {
+    if (typeof window === "undefined") return;
+
+    setIsLoading(true);
+    setError(null);
+
+    const sessionUserRaw = parseStoredUser(window.localStorage.getItem("debatel_user"));
+    const sessionUser = sessionUserRaw ? normalizeStoredUser(sessionUserRaw) : null;
+    setCurrentUser(sessionUser);
+
+    const applyUsers = (users: StoredUser[]) => {
+      const mergedUsers = mergeWithSessionUser(users, sessionUser);
+      setLeaderboardData(computeLeaderboardRows(mergedUsers));
+    };
+
+    try {
+      const response = await fetch("/api/users", { cache: "no-store" });
+      const payload = await response.json().catch(() => ({ message: "Failed to load leaderboard" }));
+      if (!response.ok) {
+        throw new Error(payload.message ?? "Failed to load leaderboard");
+      }
+
+      const serverUsers = (payload.users as StoredUser[] | undefined) ?? [];
+      if (serverUsers.length > 0) {
+        window.localStorage.setItem("debatel_users", JSON.stringify(serverUsers));
+      }
+      applyUsers(serverUsers);
+    } catch (err) {
+      console.error("Failed to fetch leaderboard", err);
+      setError("Unable to reach server. Showing cached data.");
+      const cachedRaw = window.localStorage.getItem("debatel_users");
+      let cachedUsers: StoredUser[] = [];
+      if (cachedRaw) {
+        try {
+          cachedUsers = JSON.parse(cachedRaw) as StoredUser[];
+        } catch (parseError) {
+          console.error("Failed to parse cached users", parseError);
+        }
+      }
+      applyUsers(cachedUsers);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    refreshLeaderboard();
+  }, [refreshLeaderboard]);
 
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
@@ -166,11 +186,6 @@ export default function Leaderboard() {
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("debatelUsersUpdated", handleUsersUpdated);
     };
-  }, [refreshLeaderboard]);
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => refreshLeaderboard());
-    return () => window.cancelAnimationFrame(frame);
   }, [refreshLeaderboard]);
 
   return (
@@ -195,6 +210,18 @@ export default function Leaderboard() {
       </nav>
 
       <main className="mx-auto max-w-6xl px-4 py-12">
+        {error && (
+          <div className="mb-6 rounded-md border border-yellow-500 bg-yellow-50 px-4 py-3 text-sm font-medium text-yellow-800">
+            {error}
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="mb-6 rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+            Loading leaderboard...
+          </div>
+        )}
+
         {/* Rank Tiers */}
   <div className="mb-10 border-2 border-black bg-linear-to-b from-white to-gray-50 p-8 shadow-lg">
           <h2 className="mb-6 text-center text-3xl font-bold text-black">Rank Tiers</h2>

@@ -24,6 +24,12 @@ interface TurnChangePayload {
   roundCompleted?: boolean;
 }
 
+interface TurnTimeoutPayload {
+  senderId: string;
+  round?: number;
+  roundCompleted?: boolean;
+}
+
 const parseStoredUser = (rawValue: string | null): StoredUser | null => {
   if (!rawValue) return null;
   try {
@@ -31,17 +37,6 @@ const parseStoredUser = (rawValue: string | null): StoredUser | null => {
   } catch (error) {
     console.error("Failed to parse stored user", error);
     return null;
-  }
-};
-
-const parseStoredUsers = (rawValue: string | null): StoredUser[] => {
-  if (!rawValue) return [];
-  try {
-    const parsed = JSON.parse(rawValue) as StoredUser[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("Failed to parse stored users", error);
-    return [];
   }
 };
 
@@ -117,32 +112,40 @@ function DebateRoom() {
   const READING_DURATION = 0;
   const opponentResponseTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  const persistUserToLeaderboard = (updatedUser: StoredUser) => {
-    const users = parseStoredUsers(localStorage.getItem("debatel_users"));
+  const persistUserToLeaderboard = async (updatedUser: StoredUser) => {
+    if (!updatedUser.username) return;
 
-    if (users.length === 0) {
-      localStorage.setItem("debatel_users", JSON.stringify([updatedUser]));
-      return;
+    try {
+      const response = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: updatedUser.username,
+          elo: updatedUser.elo ?? 0,
+          rankedWins: updatedUser.rankedWins ?? 0,
+          rankedLosses: updatedUser.rankedLosses ?? 0,
+          profileIcon: updatedUser.profileIcon ?? "👤",
+          profileBanner: updatedUser.profileBanner ?? "#3b82f6"
+        })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok) {
+        const serverUsers = (payload.users as StoredUser[] | undefined) ?? [];
+        if (serverUsers.length > 0) {
+          localStorage.setItem("debatel_users", JSON.stringify(serverUsers));
+        }
+      } else {
+        console.error("Failed to persist leaderboard stats", payload);
+      }
+    } catch (error) {
+      console.error("Leaderboard persistence error", error);
+    } finally {
+      window.dispatchEvent(new Event("debatelUsersUpdated"));
     }
-
-    const userIndex = users.findIndex((u) => u.username === updatedUser.username);
-    if (userIndex === -1) {
-      users.push(updatedUser);
-    } else {
-      users[userIndex] = {
-        ...users[userIndex],
-        elo: updatedUser.elo,
-        rankedWins: updatedUser.rankedWins ?? 0,
-        rankedLosses: updatedUser.rankedLosses ?? 0,
-        profileIcon: updatedUser.profileIcon,
-        profileBanner: updatedUser.profileBanner
-      };
-    }
-
-    localStorage.setItem("debatel_users", JSON.stringify(users));
   };
 
-  const awardRankedWin = (eloBonus = 30) => {
+  const awardRankedWin = async (eloBonus = 30) => {
     const storedUser = parseStoredUser(localStorage.getItem("debatel_user"));
     if (!storedUser) return null;
 
@@ -157,13 +160,13 @@ function DebateRoom() {
     localStorage.setItem("debatel_recent_elo_change", eloBonus.toString());
     (window as ExtendedWindow).lastEloChange = eloBonus;
 
-    persistUserToLeaderboard(updatedUser);
-    window.dispatchEvent(new Event("debatelUsersUpdated"));
+    await persistUserToLeaderboard(updatedUser);
+    window.dispatchEvent(new Event("storage"));
 
     return { updatedUser, eloChange: eloBonus };
   };
 
-  const applyRankedLossPenalty = (penalty = 30) => {
+  const applyRankedLossPenalty = async (penalty = 30) => {
     const storedUser = parseStoredUser(localStorage.getItem("debatel_user"));
     if (!storedUser) return null;
 
@@ -178,8 +181,8 @@ function DebateRoom() {
     localStorage.setItem("debatel_recent_elo_change", `-${penalty}`);
     (window as ExtendedWindow).lastEloChange = -penalty;
 
-    persistUserToLeaderboard(updatedUser);
-    window.dispatchEvent(new Event("debatelUsersUpdated"));
+    await persistUserToLeaderboard(updatedUser);
+    window.dispatchEvent(new Event("storage"));
 
     return { updatedUser, eloChange: -penalty };
   };
@@ -225,7 +228,7 @@ function DebateRoom() {
       if (typeof nextRound === "number") {
         setRound(Math.min(nextRound, totalRounds));
       }
-      setMessagesThisRound(0);
+  setMessagesThisRound(roundCompleted === true ? 0 : roundCompleted === false ? 1 : 0);
 
       if (roundCompleted && (nextRound ?? totalRounds) >= totalRounds) {
         // Server will emit debate-ended; this ensures timer halts immediately
@@ -233,11 +236,29 @@ function DebateRoom() {
       }
     });
 
-    socket.on("opponent-disconnected", (details: { forfeit?: boolean; beforeStart?: boolean } = {}) => {
+    socket.on("turn-timeout", ({ senderId, round: incomingRound, roundCompleted }: TurnTimeoutPayload) => {
+      if (typeof incomingRound === "number") {
+        setRound(Math.min(incomingRound, totalRounds));
+      }
+
+      const timedOutIsPlayer = socket.id === senderId;
+      const timeoutMessage: DebateMessage = {
+        sender: timedOutIsPlayer ? "You" : "Opponent",
+        text: "⏳ No submission received. Passing turn...",
+        time: timePerTurn,
+        isYourTurn: timedOutIsPlayer,
+        wasTimeout: true
+      };
+
+      setMessages((prev) => [...prev, timeoutMessage]);
+  setMessagesThisRound(roundCompleted === true ? 0 : roundCompleted === false ? 1 : 0);
+    });
+
+    socket.on("opponent-disconnected", async (details: { forfeit?: boolean; beforeStart?: boolean } = {}) => {
       const departureContext = details.beforeStart ? "before the debate began" : "mid-match";
       const isRanked = gameType === "ranked";
-  const winResult = isRanked ? awardRankedWin() : null;
-  const eloChange = winResult?.eloChange ?? 0;
+      const winResult = isRanked ? await awardRankedWin() : null;
+      const eloChange = winResult?.eloChange ?? 0;
 
       setDebateEnded(true);
       setIsJudging(false);
@@ -287,6 +308,7 @@ function DebateRoom() {
     return () => {
       socket.off("opponent-message");
       socket.off("turn-change");
+      socket.off("turn-timeout");
       socket.off("opponent-disconnected");
       socket.off("debate-ended");
     };
@@ -442,13 +464,20 @@ function DebateRoom() {
 
   const handleTimeUp = () => {
     if (hasSubmitted) return; // Already submitted, don't timeout again
+
+    if (isMultiplayer && socket && matchId) {
+      setHasSubmitted(true);
+      socket.emit("turn-timeout", { matchId });
+      return;
+    }
     
     const timedOutSpeaker = isYourTurn ? "player" : "opponent";
     const timeoutMsg = {
       sender: isYourTurn ? "You" : "Opponent",
       text: "⏳ No submission received. Passing turn...",
       time: timePerTurn,
-      isYourTurn
+      isYourTurn,
+      wasTimeout: true
     };
     setMessages(prev => [...prev, timeoutMsg]);
 
@@ -667,23 +696,8 @@ function DebateRoom() {
             user.rankedLosses = updatedLosses;
             localStorage.setItem("debatel_user", JSON.stringify(user));
             console.log("Updated localStorage debatel_user with new ELO:", newElo);
-            window.dispatchEvent(new Event("debatelUsersUpdated"));
-            
-            // Update in users list
-            const users = parseStoredUsers(localStorage.getItem("debatel_users"));
-            if (users.length > 0) {
-              const userIndex = users.findIndex((u) => u.username === user.username);
-              if (userIndex !== -1) {
-                users[userIndex] = {
-                  ...users[userIndex],
-                  elo: newElo,
-                  rankedWins: updatedWins,
-                  rankedLosses: updatedLosses
-                };
-                localStorage.setItem("debatel_users", JSON.stringify(users));
-                window.dispatchEvent(new Event("debatelUsersUpdated"));
-              }
-            }
+            window.dispatchEvent(new Event("storage"));
+            await persistUserToLeaderboard(user);
             
             // Store ELO change for display on profile page
             localStorage.setItem("debatel_recent_elo_change", eloChange.toString());
@@ -755,11 +769,11 @@ function DebateRoom() {
     }
   };
 
-  const confirmExit = () => {
+  const confirmExit = async () => {
     setShowExitConfirm(false);
 
     if (!debateEnded && gameType === "ranked") {
-      applyRankedLossPenalty(30);
+      await applyRankedLossPenalty(30);
     }
 
     if (isMultiplayer && socket && matchId && !debateEnded) {
