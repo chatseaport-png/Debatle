@@ -278,7 +278,7 @@ export default function Leaderboard() {
             <div className="flex flex-col gap-3 border-b border-white/10 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 px-8 py-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/50">Competitive Ladder</p>
-                <h2 className="mt-2 text-3xl font-black tracking-tight">Valorant-Style Rank Grid</h2>
+                <h2 className="mt-2 text-3xl font-black tracking-tight">Competitive Rank Grid</h2>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm text-white/70">
                 Each division has <span className="font-semibold text-white">three tiers</span> (I, II, III).
@@ -288,7 +288,14 @@ export default function Leaderboard() {
 
             <div className="px-6 py-8 sm:px-10">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {ranks.map((rank) => {
+                {ranks
+                  .slice()
+                  .sort((a, b) => {
+                    if (a.name === "Grandmaster") return -1;
+                    if (b.name === "Grandmaster") return 1;
+                    return (a.minElo ?? 0) - (b.minElo ?? 0);
+                  })
+                  .map((rank) => {
                   const rangeLabel = `${rank.minElo}-${rank.maxElo === Infinity ? "∞" : rank.maxElo}`;
                   return (
                     <div
@@ -314,7 +321,7 @@ export default function Leaderboard() {
                         </div>
                       </div>
                       <div className="relative z-10 border-t border-white/10 px-6 py-3 text-[11px] uppercase tracking-[0.4em] text-white/40">
-                        {rank.name} Division • Valorant Inspired
+                        {rank.name} Division • Elite Ladder
                       </div>
                     </div>
                   );
