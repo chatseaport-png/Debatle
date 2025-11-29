@@ -273,34 +273,56 @@ export default function Leaderboard() {
         )}
 
         {/* Rank Tiers */}
-  <div className="mb-10 border-2 border-black bg-linear-to-b from-white to-gray-50 p-8 shadow-lg">
-          <h2 className="mb-6 text-center text-3xl font-bold text-black">Rank Tiers</h2>
-          <div className="mb-6 mx-auto max-w-2xl rounded-lg bg-white border-2 border-gray-300 p-4 text-center text-sm text-gray-700 shadow-sm">
-            <strong>Ranking System:</strong> Each rank has 3 sub-ranks (1, 2, 3). Each sub-rank requires 100 ELO. 
-            Win: +30-45 ELO • Loss: -30 ELO
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
-            {ranks.map((rank) => (
-              <div
-                key={rank.name}
-                className="group relative flex flex-col items-center justify-center rounded-xl border-2 bg-white p-5 transition-all duration-300 hover:scale-110 hover:shadow-2xl hover:z-10"
-                style={{ 
-                  borderColor: rank.bgColor,
-                }}
-              >
-                <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-10 transition-opacity" 
-                     style={{ backgroundColor: rank.bgColor }}></div>
-                <span className="text-5xl mb-3 drop-shadow-md">{rank.icon}</span>
-                <div className="font-bold text-base text-center mb-1 z-10" style={{ color: rank.bgColor }}>
-                  {rank.name}
-                </div>
-                <div className="text-xs text-gray-600 text-center font-medium z-10">
-                  {rank.minElo}-{rank.maxElo === Infinity ? '∞' : rank.maxElo}
-                </div>
+        <section className="mb-12">
+          <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 text-white shadow-2xl">
+            <div className="flex flex-col gap-3 border-b border-white/10 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 px-8 py-6 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/50">Competitive Ladder</p>
+                <h2 className="mt-2 text-3xl font-black tracking-tight">Valorant-Style Rank Grid</h2>
               </div>
-            ))}
+              <div className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm text-white/70">
+                Each division has <span className="font-semibold text-white">three tiers</span> (I, II, III).
+                Wins award <span className="text-emerald-300">+30 to +45 ELO</span>; losses cost <span className="text-rose-300">-30 ELO</span>.
+              </div>
+            </div>
+
+            <div className="px-6 py-8 sm:px-10">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {ranks.map((rank) => {
+                  const rangeLabel = `${rank.minElo}-${rank.maxElo === Infinity ? "∞" : rank.maxElo}`;
+                  return (
+                    <div
+                      key={rank.name}
+                      className="group relative overflow-hidden rounded-2xl border border-white/10 bg-slate-900/70 backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:shadow-[0_20px_45px_rgba(0,0,0,0.55)]"
+                    >
+                      <div
+                        className="pointer-events-none absolute inset-0 opacity-50 transition-opacity duration-300 group-hover:opacity-80"
+                        style={{
+                          background: `linear-gradient(140deg, ${rank.bgColor}33 0%, ${rank.bgColor}26 40%, transparent 100%)`,
+                        }}
+                      />
+                      <div className="relative z-10 flex items-center justify-between gap-6 px-6 py-6">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/50">Tier</p>
+                          <h3 className="mt-2 text-lg font-bold uppercase tracking-wide text-white">
+                            {rank.name}
+                          </h3>
+                          <p className="mt-3 text-xs font-medium text-white/60">ELO {rangeLabel}</p>
+                        </div>
+                        <div className="rounded-full border border-white/10 bg-slate-950/50 p-4 text-5xl drop-shadow-[0_0_20px_rgba(0,0,0,0.4)]">
+                          {rank.icon}
+                        </div>
+                      </div>
+                      <div className="relative z-10 border-t border-white/10 px-6 py-3 text-[11px] uppercase tracking-[0.4em] text-white/40">
+                        {rank.name} Division • Valorant Inspired
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
 
         <div className="mb-12 border-b border-gray-200 pb-8">
           <h1 className="text-5xl font-bold text-black">Global Rankings</h1>
