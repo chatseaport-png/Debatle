@@ -17,6 +17,16 @@ export default function Lobby() {
   const [selectedMode, setSelectedMode] = useState<GameMode>("standard");
   const [selectedSide, setSelectedSide] = useState<DebateSide>("for");
   const [selectedType, setSelectedType] = useState<GameType>("practice");
+  const [privateTab, setPrivateTab] = useState<"create" | "join">("create");
+  const [privateMode, setPrivateMode] = useState<GameMode>("standard");
+  const [privateSide, setPrivateSide] = useState<DebateSide>("for");
+  const [privateJoinMode, setPrivateJoinMode] = useState<GameMode>("standard");
+  const [privateJoinSide, setPrivateJoinSide] = useState<DebateSide>("against");
+  const [privateJoinCode, setPrivateJoinCode] = useState("");
+  const [createdLobbyCode, setCreatedLobbyCode] = useState<string | null>(null);
+  const [isCreatingLobby, setIsCreatingLobby] = useState(false);
+  const [isJoiningLobby, setIsJoiningLobby] = useState(false);
+  const [privateStatus, setPrivateStatus] = useState<string | null>(null);
   const [username, setUsername] = useState(() => `Player${Math.floor(Math.random() * 9999)}`);
   const [userElo, setUserElo] = useState(0);
   const [rankedWins, setRankedWins] = useState(0);
@@ -144,22 +154,114 @@ export default function Lobby() {
   useEffect(() => {
     if (!socket) return;
 
-    // Listen for match found
-  socket.on("match-found", ({ matchId, opponent, yourSide, goesFirst, topicIndex }) => {
-      console.log("Match found!", { matchId, opponent, yourSide, goesFirst, topicIndex });
-      setInQueue(false); // Stop queue timer when match is found
-      router.push(`/debate?mode=${selectedMode}&side=${yourSide}&matchId=${matchId}&multiplayer=true&goesFirst=${goesFirst}&type=${selectedType}&opponentUsername=${encodeURIComponent(opponent.username)}&opponentElo=${opponent.elo !== undefined ? opponent.elo : 0}&opponentIcon=${encodeURIComponent(opponent.icon || "👤")}&opponentBanner=${encodeURIComponent(opponent.banner || "#3b82f6")}&userElo=${userElo}&userIcon=${encodeURIComponent(profileIcon)}&userBanner=${encodeURIComponent(profileBanner)}&topicIndex=${topicIndex}`);
-    });
+    const handleLobbyCreated = ({
+      code,
+      mode,
+      side
+    }: {
+      code: string;
+      mode?: GameMode;
+      side?: DebateSide;
+    }) => {
+      setIsCreatingLobby(false);
+      setCreatedLobbyCode(code);
+  setPrivateStatus(`Share code ${code} with your opponent. Waiting for one debater to join.`);
 
-    socket.on("queue-status", ({ position }) => {
-      console.log("Queue position:", position);
-    });
+      if (mode === "speed" || mode === "standard") {
+        setPrivateMode(mode);
+        setSelectedMode(mode);
+      }
+
+      if (side === "for" || side === "against") {
+        setPrivateSide(side);
+        setSelectedSide(side);
+      }
+
+      setSelectedType("practice");
+    };
+
+    const handleLobbyCancelled = ({ reason }: { reason?: string } = {}) => {
+      setCreatedLobbyCode(null);
+      setIsCreatingLobby(false);
+      setPrivateStatus(reason ?? "Private lobby closed.");
+    };
+
+    const handleLobbyError = ({ message }: { message?: string } = {}) => {
+      setIsCreatingLobby(false);
+      setIsJoiningLobby(false);
+      setPrivateStatus(message ?? "Unable to process private lobby request.");
+    };
+
+    socket.on("private-lobby-created", handleLobbyCreated);
+    socket.on("private-lobby-cancelled", handleLobbyCancelled);
+    socket.on("private-lobby-error", handleLobbyError);
 
     return () => {
-      socket.off("match-found");
-      socket.off("queue-status");
+      socket.off("private-lobby-created", handleLobbyCreated);
+      socket.off("private-lobby-cancelled", handleLobbyCancelled);
+      socket.off("private-lobby-error", handleLobbyError);
     };
-  }, [socket, router, selectedMode, selectedType, userElo, profileIcon, profileBanner]);
+  }, [socket]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleMatchFound = ({
+      matchId,
+      opponent,
+      yourSide,
+      goesFirst,
+      topicIndex,
+      mode: matchMode,
+      type: matchType
+    }: {
+      matchId: string;
+      opponent: { username: string; elo?: number; icon?: string; banner?: string };
+      yourSide: DebateSide;
+      goesFirst: boolean;
+      topicIndex?: number;
+      mode?: GameMode;
+      type?: GameType;
+    }) => {
+      const resolvedMode: GameMode = matchMode === "speed" || matchMode === "standard" ? matchMode : selectedMode;
+      const resolvedType: GameType = matchType === "ranked" || matchType === "practice" ? matchType : selectedType;
+
+      console.log("Match found!", {
+        matchId,
+        opponent,
+        yourSide,
+        goesFirst,
+        topicIndex,
+        mode: resolvedMode,
+        type: resolvedType
+      });
+
+      if (inQueue) {
+        setInQueue(false);
+      }
+
+      setSelectedMode(resolvedMode);
+      setSelectedType(resolvedType);
+      setCreatedLobbyCode(null);
+      setIsCreatingLobby(false);
+      setIsJoiningLobby(false);
+      setPrivateStatus(null);
+
+      router.push(`/debate?mode=${resolvedMode}&side=${yourSide}&matchId=${matchId}&multiplayer=true&goesFirst=${goesFirst}&type=${resolvedType}&opponentUsername=${encodeURIComponent(opponent.username)}&opponentElo=${opponent.elo !== undefined ? opponent.elo : 0}&opponentIcon=${encodeURIComponent(opponent.icon || "👤")}&opponentBanner=${encodeURIComponent(opponent.banner || "#3b82f6")}&userElo=${userElo}&userIcon=${encodeURIComponent(profileIcon)}&userBanner=${encodeURIComponent(profileBanner)}&topicIndex=${topicIndex}`);
+    };
+
+    const handleQueueStatus = ({ position }: { position: number }) => {
+      console.log("Queue position:", position);
+    };
+
+    socket.on("match-found", handleMatchFound);
+    socket.on("queue-status", handleQueueStatus);
+
+    return () => {
+      socket.off("match-found", handleMatchFound);
+      socket.off("queue-status", handleQueueStatus);
+    };
+  }, [socket, router, selectedMode, selectedType, userElo, profileIcon, profileBanner, inQueue]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -220,6 +322,88 @@ export default function Lobby() {
     }
     setInQueue(false);
     setQueueTime(0);
+  };
+
+  const createPrivateLobby = () => {
+    if (!socket || !isConnected) {
+      setPrivateStatus("Not connected to server. Please refresh the page.");
+      return;
+    }
+
+    if (inQueue) {
+      leaveQueue();
+    }
+
+    setSelectedMode(privateMode);
+    setSelectedSide(privateSide);
+    setSelectedType("practice");
+    setIsCreatingLobby(true);
+    setCreatedLobbyCode(null);
+    setPrivateStatus("Generating private lobby code...");
+
+    socket.emit("create-private-lobby", {
+      mode: privateMode,
+      side: privateSide,
+      username,
+      elo: userElo,
+      icon: profileIcon,
+      banner: profileBanner
+    });
+  };
+
+  const cancelPrivateLobby = () => {
+    if (!socket || !createdLobbyCode) return;
+
+    socket.emit("cancel-private-lobby", { code: createdLobbyCode });
+    setCreatedLobbyCode(null);
+    setIsCreatingLobby(false);
+    setPrivateStatus("Private lobby closed.");
+  };
+
+  const joinPrivateLobby = () => {
+    if (!socket || !isConnected) {
+      setPrivateStatus("Not connected to server. Please refresh the page.");
+      return;
+    }
+
+    const trimmedCode = privateJoinCode.trim().toUpperCase();
+    if (trimmedCode.length < 6) {
+      setPrivateStatus("Enter the full access code (6 characters).");
+      return;
+    }
+
+    if (inQueue) {
+      leaveQueue();
+    }
+
+    setPrivateJoinCode(trimmedCode);
+    setSelectedMode(privateJoinMode);
+    setSelectedSide(privateJoinSide);
+    setSelectedType("practice");
+    setIsJoiningLobby(true);
+    setPrivateStatus("Requesting access to private lobby...");
+
+    socket.emit("join-private-lobby", {
+      code: trimmedCode,
+      mode: privateJoinMode,
+      side: privateJoinSide,
+      username,
+      elo: userElo,
+      icon: profileIcon,
+      banner: profileBanner
+    });
+  };
+
+  const copyLobbyCode = async () => {
+    if (!createdLobbyCode || typeof navigator === "undefined" || !navigator.clipboard) return;
+
+    try {
+      await navigator.clipboard.writeText(createdLobbyCode);
+      setPrivateStatus("Lobby code copied to clipboard.");
+    } catch (error) {
+      console.error("Failed to copy lobby code", error);
+      setPrivateStatus("Unable to copy code automatically. Copy it manually.");
+    }
   };
 
   return (
@@ -295,15 +479,15 @@ export default function Lobby() {
                 <div className="text-xs uppercase tracking-wide text-gray-600">ELO Rating</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-green-600">{rankedWins}</div>
+                <div className="text-3xl font-bold text-black">{rankedWins}</div>
                 <div className="text-xs uppercase tracking-wide text-gray-600">Wins</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-red-600">{rankedLosses}</div>
+                <div className="text-3xl font-bold text-black">{rankedLosses}</div>
                 <div className="text-xs uppercase tracking-wide text-gray-600">Losses</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-blue-600">
+                <div className="text-3xl font-bold text-black">
                   {rankedWins + rankedLosses > 0
                     ? Math.round((rankedWins / (rankedWins + rankedLosses)) * 100)
                     : 0}%
@@ -313,6 +497,238 @@ export default function Lobby() {
             </div>
           </div>
         )}
+
+        {/* Private Matchmaking */}
+        <section className="mb-6 border border-gray-300 bg-white p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-black">Private Matchmaking Lounge</h3>
+              <p className="mt-1 text-sm text-gray-600">
+                Create or join a code-protected debate. Private matches are practice-only and never impact ELO.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 inline-flex rounded-md border border-gray-200 bg-gray-100 p-1 text-xs font-semibold uppercase tracking-wide text-gray-600">
+            <button
+              onClick={() => setPrivateTab("create")}
+              className={`rounded-md px-4 py-2 transition ${
+                privateTab === "create"
+                  ? "bg-white text-black shadow"
+                  : "text-gray-500 hover:text-black"
+              }`}
+              type="button"
+            >
+              Create Lobby
+            </button>
+            <button
+              onClick={() => setPrivateTab("join")}
+              className={`rounded-md px-4 py-2 transition ${
+                privateTab === "join"
+                  ? "bg-white text-black shadow"
+                  : "text-gray-500 hover:text-black"
+              }`}
+              type="button"
+            >
+              Join Lobby
+            </button>
+          </div>
+
+          {privateTab === "create" ? (
+            <div className="mt-6 space-y-6">
+              <div>
+                <h4 className="text-sm font-semibold text-black">Time Control</h4>
+                <div className="mt-3 grid gap-4 md:grid-cols-2">
+                  <button
+                    onClick={() => setPrivateMode("speed")}
+                    className={`border-2 p-4 text-left transition ${
+                      privateMode === "speed"
+                        ? "border-black bg-gray-50"
+                        : "border-gray-300 bg-white hover:border-gray-400"
+                    }`}
+                    type="button"
+                  >
+                    <div className="mb-1 font-bold text-black">Speed</div>
+                    <div className="text-xs text-gray-600">30 seconds per turn</div>
+                  </button>
+                  <button
+                    onClick={() => setPrivateMode("standard")}
+                    className={`border-2 p-4 text-left transition ${
+                      privateMode === "standard"
+                        ? "border-black bg-gray-50"
+                        : "border-gray-300 bg-white hover:border-gray-400"
+                    }`}
+                    type="button"
+                  >
+                    <div className="mb-1 font-bold text-black">Standard</div>
+                    <div className="text-xs text-gray-600">60 seconds per turn</div>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-semibold text-black">Pick Your Side</h4>
+                <div className="mt-3 grid gap-4 md:grid-cols-2">
+                  <button
+                    onClick={() => setPrivateSide("for")}
+                    className={`border-2 p-4 text-left transition ${
+                      privateSide === "for"
+                        ? "border-black bg-gray-50"
+                        : "border-gray-300 bg-white hover:border-gray-400"
+                    }`}
+                    type="button"
+                  >
+                    <div className="mb-1 font-bold text-black">FOR</div>
+                    <div className="text-xs text-gray-600">You&apos;ll defend the proposition.</div>
+                  </button>
+                  <button
+                    onClick={() => setPrivateSide("against")}
+                    className={`border-2 p-4 text-left transition ${
+                      privateSide === "against"
+                        ? "border-black bg-gray-50"
+                        : "border-gray-300 bg-white hover:border-gray-400"
+                    }`}
+                    type="button"
+                  >
+                    <div className="mb-1 font-bold text-black">AGAINST</div>
+                    <div className="text-xs text-gray-600">You&apos;ll rebut the proposition.</div>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <button
+                  onClick={createPrivateLobby}
+                  className="inline-flex items-center justify-center rounded-sm bg-black px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isCreatingLobby}
+                  type="button"
+                >
+                  {isCreatingLobby ? "Creating..." : "Generate Access Code"}
+                </button>
+                {createdLobbyCode && (
+                  <div className="flex flex-col gap-3 sm:items-end">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Lobby Code</div>
+                    <div className="flex items-center gap-3">
+                      <span className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-xl font-mono font-bold tracking-[0.4em] text-black">
+                        {createdLobbyCode}
+                      </span>
+                      <button
+                        onClick={copyLobbyCode}
+                        className="rounded-sm border border-gray-300 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-600 transition hover:border-black hover:text-black"
+                        type="button"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <button
+                      onClick={cancelPrivateLobby}
+                      className="text-xs font-semibold uppercase tracking-wide text-red-600 hover:text-red-500"
+                      type="button"
+                    >
+                      Cancel Lobby
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-6 space-y-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <h4 className="text-sm font-semibold text-black">Access Code</h4>
+                  <input
+                    value={privateJoinCode}
+                    onChange={(event) => setPrivateJoinCode(event.target.value.toUpperCase())}
+                    maxLength={6}
+                    autoCapitalize="characters"
+                    placeholder="Enter code"
+                    className="mt-2 w-full border border-gray-300 bg-white px-4 py-3 text-sm uppercase tracking-[0.4em] text-black outline-none transition focus:border-black"
+                    type="text"
+                  />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-black">Time Control</h4>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <button
+                      onClick={() => setPrivateJoinMode("speed")}
+                      className={`border-2 p-3 text-left transition ${
+                        privateJoinMode === "speed"
+                          ? "border-black bg-gray-50"
+                          : "border-gray-300 bg-white hover:border-gray-400"
+                      }`}
+                      type="button"
+                    >
+                      <div className="text-sm font-bold text-black">Speed</div>
+                      <div className="text-[11px] text-gray-600">30 seconds per turn</div>
+                    </button>
+                    <button
+                      onClick={() => setPrivateJoinMode("standard")}
+                      className={`border-2 p-3 text-left transition ${
+                        privateJoinMode === "standard"
+                          ? "border-black bg-gray-50"
+                          : "border-gray-300 bg-white hover:border-gray-400"
+                      }`}
+                      type="button"
+                    >
+                      <div className="text-sm font-bold text-black">Standard</div>
+                      <div className="text-[11px] text-gray-600">60 seconds per turn</div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-semibold text-black">Choose Your Side</h4>
+                <div className="mt-3 grid gap-4 md:grid-cols-2">
+                  <button
+                    onClick={() => setPrivateJoinSide("for")}
+                    className={`border-2 p-4 text-left transition ${
+                      privateJoinSide === "for"
+                        ? "border-black bg-gray-50"
+                        : "border-gray-300 bg-white hover:border-gray-400"
+                    }`}
+                    type="button"
+                  >
+                    <div className="mb-1 font-bold text-black">FOR</div>
+                    <div className="text-xs text-gray-600">Support the proposition (host may reserve this side).</div>
+                  </button>
+                  <button
+                    onClick={() => setPrivateJoinSide("against")}
+                    className={`border-2 p-4 text-left transition ${
+                      privateJoinSide === "against"
+                        ? "border-black bg-gray-50"
+                        : "border-gray-300 bg-white hover:border-gray-400"
+                    }`}
+                    type="button"
+                  >
+                    <div className="mb-1 font-bold text-black">AGAINST</div>
+                    <div className="text-xs text-gray-600">Challenge the proposition.</div>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <button
+                  onClick={joinPrivateLobby}
+                  className="inline-flex items-center justify-center rounded-sm bg-black px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isJoiningLobby}
+                  type="button"
+                >
+                  {isJoiningLobby ? "Joining..." : "Join Private Lobby"}
+                </button>
+                <p className="text-xs text-gray-500">
+                  Host decides the official side &amp; mode. If there&apos;s a conflict, adjust and rejoin.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {privateStatus && (
+            <div className="mt-6 rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600">
+              {privateStatus}
+            </div>
+          )}
+        </section>
 
         {/* Game Type Selection */}
         <div className="mb-6 border border-gray-300 bg-white p-6">

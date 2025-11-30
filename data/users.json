@@ -1,24 +1,35 @@
 [
-	{
-		"username": "Sawyer",
-		"email": "sawyer@example.com",
-		"password": "temporary123",
-		"elo": 0,
-		"rankedWins": 0,
-		"rankedLosses": 0,
-		"profileIcon": "👤",
-		"profileBanner": "#3b82f6",
-		"createdAt": "2025-11-26T00:00:00.000Z"
-	},
-	{
-		"username": "Joecool",
-		"email": "joecool@example.com",
-		"password": "temporary123",
-		"elo": 0,
-		"rankedWins": 0,
-		"rankedLosses": 0,
-		"profileIcon": "👤",
-		"profileBanner": "#3b82f6",
-		"createdAt": "2025-11-26T00:00:00.000Z"
-	}
+  {
+    "username": "Sawyer",
+    "email": "sawyer@example.com",
+    "password": "temporary123",
+    "elo": 0,
+    "rankedWins": 0,
+    "rankedLosses": 0,
+    "profileIcon": "👤",
+    "profileBanner": "#3b82f6",
+    "createdAt": "2025-11-26T00:00:00.000Z"
+  },
+  {
+    "username": "Joecool",
+    "email": "joecool@example.com",
+    "password": "temporary123",
+    "elo": 0,
+    "rankedWins": 0,
+    "rankedLosses": 0,
+    "profileIcon": "👤",
+    "profileBanner": "#3b82f6",
+    "createdAt": "2025-11-26T00:00:00.000Z"
+  },
+  {
+    "username": "tom",
+    "email": "casoysauce2018@gmail.com",
+    "password": "taco123",
+    "elo": 0,
+    "rankedWins": 0,
+    "rankedLosses": 0,
+    "profileIcon": "👤",
+    "profileBanner": "#3b82f6",
+    "createdAt": "2025-11-23T05:08:19.705Z"
+  }
 ]

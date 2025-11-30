@@ -26,6 +26,16 @@ const matchmakingQueue = {
 
 // Active matches
 const activeMatches = new Map();
+const privateLobbies = new Map();
+
+const generateLobbyCode = () => {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 6; i += 1) {
+    code += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return code;
+};
 
 app.prepare().then(() => {
   const httpServer = createServer(async (req, res) => {
@@ -92,7 +102,9 @@ app.prepare().then(() => {
           yourSide: opponent.side,
           opponentSide: side,
           goesFirst: opponent.side === 'for',
-          topicIndex
+          topicIndex,
+          mode,
+          type
         });
         
         io.to(socket.id).emit('match-found', {
@@ -101,7 +113,9 @@ app.prepare().then(() => {
           yourSide: side,
           opponentSide: opponent.side,
           goesFirst: side === 'for',
-          topicIndex
+          topicIndex,
+          mode,
+          type
         });
         
         // Join both to match room
@@ -126,6 +140,159 @@ app.prepare().then(() => {
           console.log('User left queue:', socket.id);
         }
       }
+    });
+
+    socket.on('create-private-lobby', ({
+      mode = 'standard',
+      side = 'for',
+      username = 'Player',
+      elo = 0,
+      icon = '👤',
+      banner = '#3b82f6'
+    } = {}) => {
+      const normalizedMode = mode === 'speed' ? 'speed' : 'standard';
+      const normalizedSide = side === 'against' ? 'against' : 'for';
+
+      for (const [code, lobby] of privateLobbies.entries()) {
+        if (lobby.hostSocketId === socket.id) {
+          privateLobbies.delete(code);
+          socket.emit('private-lobby-cancelled', { code, reason: 'Replaced by a new lobby.' });
+        }
+      }
+
+      let code = generateLobbyCode();
+      while (privateLobbies.has(code)) {
+        code = generateLobbyCode();
+      }
+
+      privateLobbies.set(code, {
+        code,
+        mode: normalizedMode,
+        hostSide: normalizedSide,
+        hostSocketId: socket.id,
+        host: { username, elo, icon, banner },
+        createdAt: Date.now()
+      });
+
+      console.log(`Private lobby created by ${username || 'Unknown'} (${socket.id}) with code ${code}`);
+
+      socket.emit('private-lobby-created', {
+        code,
+        mode: normalizedMode,
+        side: normalizedSide
+      });
+    });
+
+    socket.on('cancel-private-lobby', ({ code }) => {
+      if (typeof code !== 'string') return;
+
+      const normalizedCode = code.trim().toUpperCase();
+      const lobby = privateLobbies.get(normalizedCode);
+
+      if (lobby && lobby.hostSocketId === socket.id) {
+        privateLobbies.delete(normalizedCode);
+        console.log(`Private lobby ${normalizedCode} cancelled by host ${socket.id}`);
+        socket.emit('private-lobby-cancelled', { code: normalizedCode, reason: 'Cancelled by host.' });
+      }
+    });
+
+    socket.on('join-private-lobby', ({
+      code,
+      mode,
+      side = 'against',
+      username = 'Player',
+      elo = 0,
+      icon = '👤',
+      banner = '#3b82f6'
+    } = {}) => {
+      if (typeof code !== 'string') {
+        socket.emit('private-lobby-error', { message: 'Invalid lobby code.' });
+        return;
+      }
+
+      const normalizedCode = code.trim().toUpperCase();
+      if (normalizedCode.length < 6) {
+        socket.emit('private-lobby-error', { message: 'Lobby code must be six characters.' });
+        return;
+      }
+
+      const lobby = privateLobbies.get(normalizedCode);
+      if (!lobby) {
+        socket.emit('private-lobby-error', { message: 'Lobby not found or already started.' });
+        return;
+      }
+
+      if (lobby.hostSocketId === socket.id) {
+        socket.emit('private-lobby-error', { message: 'You are already hosting this lobby.' });
+        return;
+      }
+
+      const hostSocket = io.sockets.sockets.get(lobby.hostSocketId);
+      if (!hostSocket) {
+        privateLobbies.delete(normalizedCode);
+        socket.emit('private-lobby-error', { message: 'Host disconnected. Lobby closed.' });
+        return;
+      }
+
+      if (mode && mode !== lobby.mode) {
+        socket.emit('private-lobby-error', { message: `Host configured this lobby for ${lobby.mode.toUpperCase()} mode.` });
+        return;
+      }
+
+      const hostSide = lobby.hostSide;
+      const requestedSide = side === 'for' ? 'for' : 'against';
+      const guestSide = requestedSide === hostSide ? (hostSide === 'for' ? 'against' : 'for') : requestedSide;
+
+      const matchId = `private-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const topicIndex = Math.floor(Math.random() * 1000000);
+
+      const match = {
+        id: matchId,
+        mode: lobby.mode,
+        type: 'practice',
+        topicIndex,
+        player1: { id: lobby.hostSocketId, username: lobby.host.username, side: hostSide },
+        player2: { id: socket.id, username, side: guestSide },
+        currentTurn: hostSide === 'for' ? lobby.hostSocketId : socket.id,
+        messages: [],
+        scores: { [lobby.hostSocketId]: 0, [socket.id]: 0 },
+        round: 1,
+        totalRounds: TOTAL_ROUNDS,
+        messagesPlayed: 0,
+        isPrivate: true
+      };
+
+      activeMatches.set(matchId, match);
+      privateLobbies.delete(normalizedCode);
+
+      socket.join(matchId);
+      hostSocket.join(matchId);
+
+      io.to(lobby.hostSocketId).emit('match-found', {
+        matchId,
+        opponent: { username, elo, icon, banner },
+        yourSide: hostSide,
+        opponentSide: guestSide,
+        goesFirst: hostSide === 'for',
+        topicIndex,
+        mode: lobby.mode,
+        type: 'practice',
+        privateCode: normalizedCode
+      });
+
+      io.to(socket.id).emit('match-found', {
+        matchId,
+        opponent: { username: lobby.host.username, elo: lobby.host.elo, icon: lobby.host.icon, banner: lobby.host.banner },
+        yourSide: guestSide,
+        opponentSide: hostSide,
+        goesFirst: guestSide === 'for',
+        topicIndex,
+        mode: lobby.mode,
+        type: 'practice',
+        privateCode: normalizedCode
+      });
+
+      console.log(`Private practice match created (${normalizedCode}): ${lobby.host.username || 'Host'} vs ${username || 'Guest'}`);
     });
 
     // Send message in debate
@@ -267,6 +434,13 @@ app.prepare().then(() => {
           if (index !== -1) queue.splice(index, 1);
         });
       });
+
+      for (const [code, lobby] of privateLobbies.entries()) {
+        if (lobby.hostSocketId === socket.id) {
+          privateLobbies.delete(code);
+          console.log(`Private lobby ${code} removed (host disconnected).`);
+        }
+      }
       
       // Handle active matches
       activeMatches.forEach((match, matchId) => {

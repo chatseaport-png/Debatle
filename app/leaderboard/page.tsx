@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { ranks, getRankByElo } from "@/lib/rankSystem";
+import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { ranks, getRankByElo, Rank } from "@/lib/rankSystem";
 import { StoredUser } from "@/lib/types";
 
 interface LeaderboardRow {
@@ -117,6 +117,45 @@ export default function Leaderboard() {
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const renderRankCard = (rank: Rank | undefined): ReactElement | null => {
+    if (!rank) return null;
+  const rangeLabel = `${rank.minElo}-${rank.maxElo === Infinity ? "Infinity" : rank.maxElo}`;
+
+    return (
+      <div
+        key={rank.name}
+        className="group relative overflow-hidden rounded-2xl border border-white/10 bg-slate-900/70 backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:shadow-[0_20px_45px_rgba(0,0,0,0.55)]"
+      >
+        <div
+          className="pointer-events-none absolute inset-0 opacity-50 transition-opacity duration-300 group-hover:opacity-80"
+          style={{
+            background: `linear-gradient(140deg, ${rank.bgColor}33 0%, ${rank.bgColor}26 40%, transparent 100%)`,
+          }}
+        />
+        <div className="relative z-10 flex items-center justify-between gap-6 px-6 py-6">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/50">Tier</p>
+            <h3 className="mt-2 text-lg font-bold uppercase tracking-wide text-white">
+              {rank.name}
+            </h3>
+            <p className="mt-3 text-xs font-medium text-white/60">ELO {rangeLabel}</p>
+          </div>
+          <div className="rounded-full border border-white/10 bg-slate-950/50 p-4 text-5xl drop-shadow-[0_0_20px_rgba(0,0,0,0.4)]">
+            {rank.icon}
+          </div>
+        </div>
+        <div className="relative z-10 border-t border-white/10 px-6 py-3 text-[11px] uppercase tracking-[0.4em] text-white/40">
+          {rank.name} Division • Elite Ladder
+        </div>
+      </div>
+    );
+  };
+
+  const renderRankRow = (names: string[]) =>
+    names
+      .map((name) => renderRankCard(ranks.find((rank) => rank.name === name)))
+      .filter((card): card is ReactElement => Boolean(card));
 
   const refreshLeaderboard = useCallback(async () => {
     if (typeof window === "undefined") return;
@@ -275,7 +314,7 @@ export default function Leaderboard() {
         {/* Rank Tiers */}
         <section className="mb-12">
           <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 text-white shadow-2xl">
-            <div className="flex flex-col gap-3 border-b border-white/10 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 px-8 py-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 border-b border-white/10 bg-linear-to-r from-slate-900 via-slate-900 to-slate-800 px-8 py-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/50">Competitive Ladder</p>
                 <h2 className="mt-2 text-3xl font-black tracking-tight">Competitive Rank Grid</h2>
@@ -287,45 +326,23 @@ export default function Leaderboard() {
             </div>
 
             <div className="px-6 py-8 sm:px-10">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {ranks
-                  .slice()
-                  .sort((a, b) => {
-                    if (a.name === "Grandmaster") return -1;
-                    if (b.name === "Grandmaster") return 1;
-                    return (a.minElo ?? 0) - (b.minElo ?? 0);
-                  })
-                  .map((rank) => {
-                  const rangeLabel = `${rank.minElo}-${rank.maxElo === Infinity ? "∞" : rank.maxElo}`;
-                  return (
-                    <div
-                      key={rank.name}
-                      className="group relative overflow-hidden rounded-2xl border border-white/10 bg-slate-900/70 backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:shadow-[0_20px_45px_rgba(0,0,0,0.55)]"
-                    >
-                      <div
-                        className="pointer-events-none absolute inset-0 opacity-50 transition-opacity duration-300 group-hover:opacity-80"
-                        style={{
-                          background: `linear-gradient(140deg, ${rank.bgColor}33 0%, ${rank.bgColor}26 40%, transparent 100%)`,
-                        }}
-                      />
-                      <div className="relative z-10 flex items-center justify-between gap-6 px-6 py-6">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/50">Tier</p>
-                          <h3 className="mt-2 text-lg font-bold uppercase tracking-wide text-white">
-                            {rank.name}
-                          </h3>
-                          <p className="mt-3 text-xs font-medium text-white/60">ELO {rangeLabel}</p>
-                        </div>
-                        <div className="rounded-full border border-white/10 bg-slate-950/50 p-4 text-5xl drop-shadow-[0_0_20px_rgba(0,0,0,0.4)]">
-                          {rank.icon}
-                        </div>
-                      </div>
-                      <div className="relative z-10 border-t border-white/10 px-6 py-3 text-[11px] uppercase tracking-[0.4em] text-white/40">
-                        {rank.name} Division • Elite Ladder
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="space-y-6">
+                {/* Top row with centered Grandmaster */}
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="hidden sm:block" aria-hidden />
+                  {renderRankCard(ranks.find((r) => r.name === "Grandmaster")!)}
+                  <div className="hidden sm:block" aria-hidden />
+                </div>
+
+                {/* Second row */}
+                <div className="grid gap-4 sm:grid-cols-3">
+                  {renderRankRow(["Master", "Diamond", "Platinum"])}
+                </div>
+
+                {/* Third row */}
+                <div className="grid gap-4 sm:grid-cols-3">
+                  {renderRankRow(["Gold", "Silver", "Bronze"])}
+                </div>
               </div>
             </div>
           </div>
